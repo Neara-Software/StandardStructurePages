@@ -3,306 +3,450 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Library Orientation</title>
+<title>Library Orientation vs Model</title>
 <link rel="stylesheet" href="../assets/style.css">
 <style>
-  :root { --accent:#2dd4bf; --pole:#60a5fa; --first:#f59e0b; --last:#f43f5e; --muted:#9fb0c2; --ink:#e6edf3; --grid:#1c2633; --subgrid:#131a23; }
-
-  html, body { height:100%; margin:0; overflow:hidden; } /* no scroll */
-  /* two-column layout: stage | sidebar */
+  :root {
+    --accent:#2dd4bf; --pole:#60a5fa; --first:#f59e0b; --last:#f43f5e;
+    --muted:#9fb0c2; --ink:#e6edf3; --grid:#1c2633; --subgrid:#131a23; --warn:#ef4444;
+  }
+  html, body { height:100%; margin:0; overflow:hidden; background:#0b0f14; color:var(--ink); }
   .wrap {
     display:grid;
-    grid-template-columns: 1fr 280px;
+    grid-template-columns: 1fr 1fr;
     grid-template-rows: 100vh;
-    height:100vh;
-    width:100vw;
+    height:100vh; width:100vw;
   }
-
-  /* left stage with diagram */
-  .stage { position:relative; height:100%; background:#0b0f14; }
+  .panel { position:relative; border-left:1px solid #0f1622; }
+  .panel:first-child { border-left:none; }
+  .title {
+    position:absolute; top:.6rem; left:.75rem; font-size:12px; color:var(--muted);
+    background:#0f162280; padding:.25rem .5rem; border:1px solid #1d2634; border-radius:.5rem;
+  }
+  .stage { position:absolute; inset:0; }
   svg { display:block; width:100%; height:100%; }
 
-  /* right sidebar with actions */
-  .sidebar {
-    display:flex; flex-direction:column; gap:.75rem;
-    padding:1rem; border-left:1px solid #0f1622;
+  /* mini toolbar per panel */
+  .toolbar {
+    position:absolute; top:.6rem; right:.6rem;
+    display:flex; flex-direction:column; gap:.45rem;
     background:linear-gradient(180deg,#0e141d,#0b1017);
+    border:1px solid #1d2634; border-radius:.5rem; padding:.45rem;
   }
-  .sidebar h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 .25rem 0; }
-  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-  button { background:#141b27; color:var(--ink); border:1px solid #1d2634; padding:.45rem .7rem; border-radius:.5rem; cursor:pointer; }
+  .row { display:flex; gap:.45rem; align-items:center; }
+  button { background:#141b27; color:var(--ink); border:1px solid #1d2634; padding:.35rem .55rem; border-radius:.45rem; cursor:pointer; }
   button:hover { border-color:#2b3a53; }
   button:disabled { opacity:.5; cursor:not-allowed; }
-  .pill { padding:.28rem .6rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); }
-  .note { font-size:12px; color:var(--muted); line-height:1.35; }
+  .pill { padding:.25rem .55rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); font-size:12px; }
 
-  /* on-canvas HUD */
+  /* HUD */
   .angle {
-    position:absolute; left:1rem; bottom:1rem;
+    position:absolute; left:.75rem; bottom:.75rem;
     background:#0f1622cc; backdrop-filter: blur(6px);
-    border:1px solid #1d2634; padding:.5rem .65rem;
-    border-radius:.6rem; color:var(--ink);
-  }
-  .compass-box {
-    position:absolute; right:1rem; bottom:1rem;
-    width:140px; height:140px;
-    border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc;
+    border:1px solid #1d2634; padding:.45rem .6rem;
+    border-radius:.6rem; color:var(--ink); font-size:13px;
   }
   .hint {
-    position:absolute; left:1rem; top:1rem; font-size:12px; color:var(--muted);
-    background:#0f162280; border:1px solid #1d2634; border-radius:.5rem; padding:.35rem .5rem;
+    position:absolute; left:.75rem; top:2.2rem; font-size:12px; color:var(--muted);
+    background:#0f162280; border:1px solid #1d2634; border-radius:.5rem; padding:.3rem .45rem;
+  }
+  .compass-box {
+    position:absolute; right:.75rem; bottom:.75rem;
+    width:130px; height:130px;
+    border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc;
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <!-- LEFT: diagram -->
-  <div class="stage" id="stage">
-    <svg id="scene" viewBox="0 0 1200 700" aria-label="grid scene">
-      <defs>
-        <pattern id="subgrid" width="25" height="25" patternUnits="userSpaceOnUse">
-          <path d="M25 0H0V25" fill="none" stroke="var(--subgrid)" stroke-width="1"/>
-        </pattern>
-        <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
-          <rect width="100" height="100" fill="url(#subgrid)"/>
-          <path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1.2"/>
-        </pattern>
-        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
-        </marker>
-      </defs>
-
-      <!-- background grid -->
-      <rect x="0" y="0" width="1200" height="700" fill="url(#grid)"/>
-
-      <!-- axes (X longitudinal, Y transverse) -->
-      <g id="axes">
-        <line x1="600" y1="0"   x2="600" y2="700" stroke="#334155" stroke-width="1.5"/>
-        <line x1="0"   y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
-        <text x="610"  y="20"  fill="var(--muted)" font-size="12">Y (Transverse)</text>
-        <text x="1180" y="365" fill="var(--muted)" font-size="12" text-anchor="end">X (Longitudinal)</text>
-      </g>
-
-      <!-- dynamic layers -->
-      <g id="connections"></g>
-      <g id="greenVector"></g>
-      <g id="poles"></g>
-    </svg>
-
-    <!-- HUD -->
-    <div class="hint" id="hint"></div>
-    <div class="angle" id="angleBox">Angle to transverse (Y): <b>—</b></div>
-
-    <!-- Compass (bottom-right) -->
-    <div class="compass-box">
-      <svg id="compass" viewBox="-60 -60 120 120" width="140" height="140">
-        <rect x="-60" y="-60" width="120" height="120" fill="none"/>
-        <g fill="#9fb0c2" font-size="8" text-anchor="middle" dominant-baseline="middle">
-          <line x1="-50" y1="0" x2="50" y2="0" stroke="#334155" stroke-width="1"/>
-          <line x1="0" y1="-50" x2="0" y2="50" stroke="#334155" stroke-width="1"/>
-          <text x="40" y="10">X</text>
-          <text x="8"  y="-40">Y</text>
+  <!-- LEFT: LIBRARY PANEL -->
+  <div class="panel" id="panel-lib">
+    <div class="title">Library</div>
+    <div class="stage">
+      <svg id="scene-lib" viewBox="0 0 1200 700" aria-label="library grid">
+        <defs>
+          <pattern id="subgrid" width="25" height="25" patternUnits="userSpaceOnUse">
+            <path d="M25 0H0V25" fill="none" stroke="var(--subgrid)" stroke-width="1"/>
+          </pattern>
+          <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+            <rect width="100" height="100" fill="url(#subgrid)"/>
+            <path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1.2"/>
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="1200" height="700" fill="url(#grid)"/>
+        <g>
+          <line x1="600" y1="0"   x2="600" y2="700" stroke="var(--warn)" stroke-width="2.5"/>
+          <line x1="0"   y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
+          <line x1="592" y1="342" x2="608" y2="358" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="592" y1="358" x2="608" y2="342" stroke="var(--warn)" stroke-width="2.5" stroke-linecap="round"/>
+          <text x="610" y="20" fill="var(--muted)" font-size="12">Y</text>
+          <text x="1180" y="365" fill="var(--muted)" font-size="12" text-anchor="end">X</text>
         </g>
-        <path id="wedge" d="" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>
-        <line id="dirLine" x1="0" y1="0" x2="0" y2="-45" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)"/>
+        <g id="lib-connections"></g>
+        <g id="lib-green"></g>
+        <g id="lib-poles"></g>
       </svg>
+      <div class="hint" id="lib-hint"></div>
+      <div class="angle" id="lib-angle">Angle to Y: <b>—</b></div>
+      <div class="compass-box">
+        <svg id="lib-compass" viewBox="-60 -60 120 120" width="130" height="130">
+          <rect x="-60" y="-60" width="120" height="120" fill="none"/>
+          <g fill="#9fb0c2" font-size="8" text-anchor="middle" dominant-baseline="middle">
+            <line x1="-50" y1="0" x2="50" y2="0" stroke="#334155" stroke-width="1"/>
+            <line x1="0" y1="-50" x2="0" y2="50" stroke="#334155" stroke-width="1"/>
+            <text x="40" y="10">X</text>
+            <text x="8"  y="-40">Y</text>
+          </g>
+          <path id="lib-wedge" d="" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>
+          <line id="lib-dir" x1="0" y1="0" x2="0" y2="-45" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)"/>
+        </svg>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="row">
+        <button id="lib-add">+</button>
+        <button id="lib-rem">−</button>
+      </div>
+      <div class="row"><span class="pill" id="lib-count">0 poles</span></div>
     </div>
   </div>
 
-  <!-- RIGHT: actions -->
-  <aside class="sidebar">
-    <h2>Actions</h2>
-    <div class="row">
-      <button id="addBtn">Add pole</button>
-      <button id="removeBtn">Remove pole</button>
+  <!-- RIGHT: MODEL PANEL -->
+  <div class="panel" id="panel-model">
+    <div class="title">Model</div>
+    <div class="stage">
+      <svg id="scene-model" viewBox="0 0 1200 700" aria-label="model grid">
+        <defs>
+          <pattern id="subgrid2" width="25" height="25" patternUnits="userSpaceOnUse">
+            <path d="M25 0H0V25" fill="none" stroke="var(--subgrid)" stroke-width="1"/>
+          </pattern>
+          <pattern id="grid2" width="100" height="100" patternUnits="userSpaceOnUse">
+            <rect width="100" height="100" fill="url(#subgrid2)"/>
+            <path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1.2"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="1200" height="700" fill="url(#grid2)"/>
+        <g>
+          <line x1="600" y1="0"   x2="600" y2="700" stroke="#334155" stroke-width="1.5"/>
+          <line x1="0"   y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
+          <text x="610" y="20" fill="var(--muted)" font-size="12">Y</text>
+          <text x="1180" y="365" fill="var(--muted)" font-size="12" text-anchor="end">X</text>
+        </g>
+        <g id="model-trans"></g>
+        <g id="model-origin"></g>
+        <g id="model-connections"></g>
+        <g id="model-green"></g>
+        <g id="model-poles"></g>
+      </svg>
+      <div class="hint" id="model-hint"></div>
+      <div class="angle" id="model-angle">Angle to Y: <b>—</b></div>
+      <!-- (No compass in the model panel) -->
     </div>
-    <div class="row">
-      <span class="pill" id="countPill">0 poles</span>
+    <div class="toolbar">
+      <div class="row">
+        <button id="model-add">+</button>
+        <button id="model-rem">−</button>
+      </div>
+      <div class="row"><span class="pill" id="model-count">0 poles</span></div>
     </div>
-    <p class="note">
-      Green line: <code>0</code> = none, <code>1</code> = along Y (transverse), <code>2–4</code> = first→last.<br>
-      Angle is measured to the transverse (Y) axis.
-    </p>
-  </aside>
+  </div>
 </div>
 
 <script>
 (() => {
-  const scene = document.getElementById('scene');
-  const polesLayer = document.getElementById('poles');
-  const connections = document.getElementById('connections');
-  const greenVector = document.getElementById('greenVector');
-  const angleBox = document.getElementById('angleBox');
-  const hint = document.getElementById('hint');
-
-  const addBtn = document.getElementById('addBtn');
-  const removeBtn = document.getElementById('removeBtn');
-  const countPill = document.getElementById('countPill');
-
-  const wedge = document.getElementById('wedge');
-  const dirLine = document.getElementById('dirLine');
-
-  let poles = []; // supports 0..4
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rad2deg = r => r * (180 / Math.PI);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrapPI = x => { const t=2*Math.PI; return ((x + Math.PI) % t + t) % t - Math.PI; };
 
-  function setCountPill(){
-    countPill.textContent = `${poles.length} pole${poles.length===1?'':'s'}`;
-  }
-
-  function angleToTransverseDegFromVec(dx, dy){
-    const ux = dx, uy = -dy; // y-up math coords
+  function angleToYDeg(dx, dy){
+    const ux = dx, uy = -dy; // y-up
     const len = Math.hypot(ux, uy) || 1;
     const cos = Math.abs(uy) / len;
     return rad2deg(Math.acos(Math.max(-1, Math.min(1, cos))));
   }
 
-  function updateCompassFromAngle(phi){
-    const start = -Math.PI/2; // +Y axis
-    let d = wrapPI(phi - start);
-    const max = Math.PI/2; d = Math.max(-max, Math.min(max, d));
-    const r = 42;
-    const x0 = r * Math.cos(start),  y0 = r * Math.sin(start);
-    const x1 = r * Math.cos(start + d), y1 = r * Math.sin(start + d);
-    wedge.setAttribute('d', `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 ${d>=0?1:0} ${x1.toFixed(2)} ${y1.toFixed(2)}`);
-    const rLine = 45;
-    dirLine.setAttribute('x2', (rLine * Math.cos(phi)).toFixed(2));
-    dirLine.setAttribute('y2', (rLine * Math.sin(phi)).toFixed(2));
-  }
+  function makeStage(prefix, startPoles = []){
+    const scene = document.getElementById(`scene-${prefix}`);
+    const gConn = document.getElementById(`${prefix}-connections`);
+    const gGreen= document.getElementById(`${prefix}-green`);
+    const gPoles= document.getElementById(`${prefix}-poles`);
+    const angleBox = document.getElementById(`${prefix}-angle`);
+    const hint = document.getElementById(`${prefix}-hint`);
+    const addBtn = document.getElementById(`${prefix}-add`);
+    const remBtn = document.getElementById(`${prefix}-rem`);
+    const countPill = document.getElementById(`${prefix}-count`);
+    const wedge = document.getElementById(`${prefix}-wedge`);
+    const dir   = document.getElementById(`${prefix}-dir`);
 
-  function draw(){
-    setCountPill();
-    // clear layers
-    connections.innerHTML = '';
-    greenVector.innerHTML = '';
-    polesLayer.innerHTML = '';
+    let poles = startPoles.slice(); // 0..4
+    const drawHooks = new Set();
+    const emitDraw = () => { drawHooks.forEach(fn => { try { fn(); } catch(e){ console.error(e); } }); };
 
-    if (poles.length === 0){
-      angleBox.innerHTML = 'Angle to transverse (Y): <b>—</b>';
-      hint.textContent = 'No poles yet. Use “Add pole”.';
-      updateCompassFromAngle(-Math.PI/2); // default up
-    } else if (poles.length === 1){
-      hint.textContent = '1 pole: reference = along Y (transverse).';
-      const p = poles[0];
-      drawPole(p, 0, true, true);
+    function setCount(){ countPill.textContent = `${poles.length} pole${poles.length===1?'':'s'}`; }
 
-      // reference green line up the Y through the pole X
-      const yTop = 50, yBottom = 650;
-      drawGreenLine(p.x, yBottom, p.x, yTop);
+    function clientToSvg(clientX, clientY){
+      const pt = scene.createSVGPoint(); pt.x = clientX; pt.y = clientY;
+      const p = pt.matrixTransform(scene.getScreenCTM().inverse());
+      return { x: p.x, y: p.y };
+    }
 
-      angleBox.innerHTML = 'Angle to transverse (Y): <b>0.0°</b>';
-      updateCompassFromAngle(-Math.PI/2);
-    } else {
-      hint.textContent = '';
+    function makeDraggable(el){
+      let dragging=false, idx=+el.dataset.index;
+      const down = (e)=>{ dragging=true; idx=+el.dataset.index; el.style.cursor='grabbing'; el.setPointerCapture?.(e.pointerId); };
+      const move = (e)=>{ if(!dragging) return;
+        const p = clientToSvg(e.clientX, e.clientY);
+        poles[idx].x = clamp(p.x, 10, 1190);
+        poles[idx].y = clamp(p.y, 10, 690);
+        draw();
+      };
+      const up = (e)=>{ dragging=false; el.style.cursor='grab'; el.releasePointerCapture?.(e.pointerId); };
+      el.addEventListener('pointerdown', down);
+      scene.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    }
 
-      // connections and poles
-      for (let i=0;i<poles.length-1;i++){
-        drawConnection(poles[i], poles[i+1]);
+    function drawConnection(a, b, group){
+      const seg = document.createElementNS('http://www.w3.org/2000/svg','line');
+      seg.setAttribute('x1', a.x); seg.setAttribute('y1', a.y);
+      seg.setAttribute('x2', b.x); seg.setAttribute('y2', b.y);
+      seg.setAttribute('stroke', '#2a3342'); seg.setAttribute('stroke-width', 1.2);
+      group.appendChild(seg);
+    }
+
+    function drawGreen(x1,y1,x2,y2){
+      const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+      ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
+      ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+      ln.setAttribute('stroke','var(--accent)'); ln.setAttribute('stroke-width',3);
+      ln.setAttribute('marker-end','url(#arrow)');
+      gGreen.appendChild(ln);
+    }
+
+    function drawPole(p, idx, isFirst, isLast){
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+      c.setAttribute('r', (isFirst||isLast) ? 10 : 8);
+      c.setAttribute('fill', isFirst ? 'var(--first)' : (isLast ? 'var(--last)' : 'var(--pole)'));
+      c.style.cursor='grab'; c.dataset.index = idx.toString();
+      makeDraggable(c); gPoles.appendChild(c);
+
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
+      t.setAttribute('fill', '#9fb0c2'); t.setAttribute('font-size', '12');
+      t.textContent = `P${idx+1}`; gPoles.appendChild(t);
+    }
+
+    function compassToPhi(phi){
+      if (!wedge || !dir) return; // no compass for model
+      const start = -Math.PI/2; // +Y
+      let d = wrapPI(phi - start);
+      const max = Math.PI/2; d = Math.max(-max, Math.min(max, d));
+      const r = 42;
+      const x0 = r * Math.cos(start),  y0 = r * Math.sin(start);
+      const x1 = r * Math.cos(start + d), y1 = r * Math.sin(start + d);
+      wedge.setAttribute('d', `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 ${d>=0?1:0} ${x1.toFixed(2)} ${y1.toFixed(2)}`);
+      const rLine = 45;
+      dir.setAttribute('x2', (rLine * Math.cos(phi)).toFixed(2));
+      dir.setAttribute('y2', (rLine * Math.sin(phi)).toFixed(2));
+    }
+
+    function draw(){
+      setCount();
+      gConn.innerHTML = ''; gGreen.innerHTML = ''; gPoles.innerHTML = '';
+
+      if (poles.length === 0){
+        hint.textContent = 'No poles. + to add.';
+        angleBox.innerHTML = 'Angle to Y: <b>—</b>';
+        compassToPhi(-Math.PI/2);
+        emitDraw();
+        return;
       }
+      if (poles.length === 1){
+        hint.textContent = '1 pole; reference along Y.';
+        const p = poles[0];
+        drawPole(p, 0, true, true);
+        // reference green line up the Y through the pole X
+        drawGreen(p.x, 650, p.x, 50);
+        angleBox.innerHTML = 'Angle to Y: <b>0.0°</b>';
+        compassToPhi(-Math.PI/2);
+        emitDraw();
+        return;
+      }
+
+      hint.textContent = '';
+      for (let i=0;i<poles.length-1;i++) drawConnection(poles[i], poles[i+1], gConn);
       poles.forEach((p, idx) => drawPole(p, idx, idx===0, idx===poles.length-1));
 
-      // first → last reference
       const first = poles[0], last = poles[poles.length-1];
-      drawGreenLine(first.x, first.y, last.x, last.y);
+      drawGreen(first.x, first.y, last.x, last.y);
 
       const dx = last.x - first.x, dy = last.y - first.y;
-      const deg = angleToTransverseDegFromVec(dx, dy).toFixed(1);
-      angleBox.innerHTML = `Angle to transverse (Y): <b>${deg}°</b>`;
-      updateCompassFromAngle(Math.atan2(dy, dx));
+      angleBox.innerHTML = `Angle to Y: <b>${angleToYDeg(dx, dy).toFixed(1)}°</b>`;
+      compassToPhi(Math.atan2(dy, dx));
+      emitDraw();
     }
 
-    updateButtons();
-  }
-
-  function drawConnection(a, b){
-    const seg = document.createElementNS('http://www.w3.org/2000/svg','line');
-    seg.setAttribute('x1', a.x); seg.setAttribute('y1', a.y);
-    seg.setAttribute('x2', b.x); seg.setAttribute('y2', b.y);
-    seg.setAttribute('stroke', '#2a3342'); seg.setAttribute('stroke-width', 1.2);
-    connections.appendChild(seg);
-  }
-
-  function drawGreenLine(x1,y1,x2,y2){
-    const gLine = document.createElementNS('http://www.w3.org/2000/svg','line');
-    gLine.setAttribute('x1', x1); gLine.setAttribute('y1', y1);
-    gLine.setAttribute('x2', x2); gLine.setAttribute('y2', y2);
-    gLine.setAttribute('stroke','var(--accent)'); gLine.setAttribute('stroke-width',3);
-    gLine.setAttribute('marker-end','url(#arrow)');
-    greenVector.appendChild(gLine);
-  }
-
-  function drawPole(p, idx, isFirst, isLast){
-    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
-    c.setAttribute('r', (isFirst||isLast) ? 10 : 8);
-    c.setAttribute('fill', isFirst ? 'var(--first)' : (isLast ? 'var(--last)' : 'var(--pole)'));
-    c.style.cursor='grab'; c.dataset.index = idx.toString();
-    makeDraggable(c); polesLayer.appendChild(c);
-
-    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
-    t.setAttribute('fill', '#9fb0c2'); t.setAttribute('font-size', '12');
-    t.textContent = `P${idx+1}`; polesLayer.appendChild(t);
-  }
-
-  function makeDraggable(el){
-    let dragging=false, idx=+el.dataset.index;
-    const down = (e)=>{ dragging=true; idx=+el.dataset.index; el.style.cursor='grabbing'; el.setPointerCapture?.(e.pointerId); };
-    const move = (e)=>{ if(!dragging) return;
-      const pt = clientToSvg(e.clientX, e.clientY);
-      poles[idx].x = clamp(pt.x, 10, 1190);
-      poles[idx].y = clamp(pt.y, 10, 690);
+    function addPole(){
+      if (poles.length >= 4) return;
+      if (poles.length === 0){
+        poles.push({ x: 600, y: 350 });
+      } else if (poles.length === 1){
+        const a = poles[0]; poles.push({ x: a.x + 200, y: a.y - 100 });
+      } else {
+        // append at the end (extrapolate from last two)
+        const last = poles[poles.length-1], prev = poles[poles.length-2];
+        const nx = last.x + 0.6*(last.x - prev.x);
+        const ny = last.y + 0.6*(last.y - prev.y);
+        poles.push({ x: nx, y: ny });
+      }
       draw();
+    }
+    function remPole(){
+      if (poles.length === 0) return;
+      poles.pop(); // always remove last
+      draw();
+    }
+
+    addBtn.addEventListener('click', addPole);
+    remBtn.addEventListener('click', remPole);
+
+    draw();
+    return {
+      get poles(){ return poles; },
+      set poles(v){ poles = v; draw(); },
+      draw,
+      onDraw(fn){
+        if (typeof fn === 'function') drawHooks.add(fn);
+        return () => drawHooks.delete(fn);
+      },
+      getRef(){
+        if (poles.length === 0) return { phi: -Math.PI/2, mid:{x:600,y:350}, haveLine:false };
+        if (poles.length === 1) return { phi: -Math.PI/2, mid:{x:poles[0].x,y:poles[0].y}, haveLine:true };
+        const a = poles[0], b = poles[poles.length-1];
+        return { phi: Math.atan2(b.y - a.y, b.x - a.x), mid:{ x:(a.x+b.x)/2, y:(a.y+b.y)/2 }, haveLine:true };
+      },
+      scene
     };
-    const up = (e)=>{ dragging=false; el.style.cursor='grab'; el.releasePointerCapture?.(e.pointerId); };
-    el.addEventListener('pointerdown', down);
-    scene.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
   }
 
-  function clientToSvg(clientX, clientY){
-    const pt = scene.createSVGPoint(); pt.x = clientX; pt.y = clientY;
-    const p = pt.matrixTransform(scene.getScreenCTM().inverse());
-    return { x: p.x, y: p.y };
-  }
+  // create stages
+  const lib   = makeStage('lib',   []);
+  const model = makeStage('model', []);
 
-  // Sidebar controls: allow 0..4 poles
-  addBtn.addEventListener('click', () => {
-    if (poles.length >= 4) return;
-    if (poles.length === 0){
-      poles.push({ x: 600, y: 350 }); // center
-    } else if (poles.length === 1){
-      const a = poles[0];
-      poles.push({ x: a.x + 200, y: a.y - 100 });
-    } else {
-      const last = poles[poles.length-1], prev = poles[poles.length-2];
-      const nx = prev.x + 0.6*(last.x - prev.x);
-      const ny = prev.y + 0.6*(last.y - prev.y);
-      poles.splice(poles.length-1, 0, { x: nx, y: ny });
+  const LIB_ORIGIN = { x: 600, y: 350 };
+  const LIB_AXIS_DIR = { x: 0, y: 1 };
+  const gModelTrans = document.getElementById('model-trans');
+  const gModelOrigin = document.getElementById('model-origin');
+
+  function getBasis(stage){
+    const pts = stage.poles;
+    if (!pts || pts.length === 0) return null;
+    const first = pts[0];
+    let dir = { x: 0, y: -1 };
+    let length = 1;
+    let last = first;
+    let hasLine = false;
+    if (pts.length >= 2){
+      const candidateLast = pts[pts.length - 1];
+      const dx = candidateLast.x - first.x;
+      const dy = candidateLast.y - first.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1e-6){
+        dir = { x: dx / len, y: dy / len };
+        length = len;
+        last = candidateLast;
+        hasLine = true;
+      }
     }
-    draw();
-  });
-
-  removeBtn.addEventListener('click', () => {
-    if (poles.length === 0) return;
-    if (poles.length === 1){
-      poles = [];
-    } else if (poles.length === 2){
-      poles.pop();
-    } else {
-      poles.splice(poles.length-2, 1);
-    }
-    draw();
-  });
-
-  function updateButtons(){
-    addBtn.disabled = poles.length >= 4;
-    removeBtn.disabled = poles.length === 0;
+    const perp = { x: -dir.y, y: dir.x };
+    return { first, last, dir, perp, length, hasLine };
   }
 
-  // initial render
-  draw();
+  function createTransform(libBasis, modelBasis){
+    const phiLib = Math.atan2(libBasis.dir.y, libBasis.dir.x);
+    const phiModel = Math.atan2(modelBasis.dir.y, modelBasis.dir.x);
+    const delta = phiModel - phiLib;
+    const cos = Math.cos(delta);
+    const sin = Math.sin(delta);
+    const scale = modelBasis.length / libBasis.length;
+
+    const rotateScale = (x, y) => ({
+      x: (x * cos - y * sin) * scale,
+      y: (x * sin + y * cos) * scale
+    });
+
+    return {
+      applyPoint(pt){
+        const relX = pt.x - libBasis.first.x;
+        const relY = pt.y - libBasis.first.y;
+        const v = rotateScale(relX, relY);
+        return {
+          x: modelBasis.first.x + v.x,
+          y: modelBasis.first.y + v.y
+        };
+      },
+      applyVector(vec){
+        return rotateScale(vec.x, vec.y);
+      }
+    };
+  }
+
+  function drawCross(group, x, y, size = 16){
+    const half = size / 2;
+    const stroke = 'var(--warn)';
+    const strokeWidth = 2.5;
+    const mk = (x1, y1, x2, y2) => {
+      const ln = document.createElementNS('http://www.w3.org/2000/svg','line');
+      ln.setAttribute('x1', x1);
+      ln.setAttribute('y1', y1);
+      ln.setAttribute('x2', x2);
+      ln.setAttribute('y2', y2);
+      ln.setAttribute('stroke', stroke);
+      ln.setAttribute('stroke-width', strokeWidth);
+      ln.setAttribute('stroke-linecap', 'round');
+      group.appendChild(ln);
+    };
+    mk(x - half, y - half, x + half, y + half);
+    mk(x - half, y + half, x + half, y - half);
+  }
+
+  function updateModelFrame(){
+    gModelTrans.innerHTML = '';
+    gModelOrigin.innerHTML = '';
+
+    const libBasis = getBasis(lib);
+    const modelBasis = getBasis(model);
+    if (!libBasis || !modelBasis) return;
+    if (!libBasis.hasLine || !modelBasis.hasLine) return;
+
+    const transform = createTransform(libBasis, modelBasis);
+
+    const originModel = transform.applyPoint(LIB_ORIGIN);
+    drawCross(gModelOrigin, originModel.x, originModel.y, 16);
+
+    const axisVector = transform.applyVector(LIB_AXIS_DIR);
+    const axisLen = Math.hypot(axisVector.x, axisVector.y);
+    if (axisLen < 1e-6) return;
+    const nx = axisVector.x / axisLen;
+    const ny = axisVector.y / axisLen;
+    const span = 1400;
+    const axisLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+    axisLine.setAttribute('x1', originModel.x - nx * span);
+    axisLine.setAttribute('y1', originModel.y - ny * span);
+    axisLine.setAttribute('x2', originModel.x + nx * span);
+    axisLine.setAttribute('y2', originModel.y + ny * span);
+    axisLine.setAttribute('stroke', 'var(--warn)');
+    axisLine.setAttribute('stroke-width', 2.5);
+    axisLine.setAttribute('stroke-linecap', 'round');
+    gModelTrans.appendChild(axisLine);
+  }
+
+  lib.onDraw(updateModelFrame);
+  model.onDraw(updateModelFrame);
+  updateModelFrame();
 })();
 </script>
 </body>
