@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rotation Bisectors</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  :root {
+    --accent:#2dd4bf; --pole:#60a5fa; --first:#f59e0b; --last:#f43f5e;
+    --muted:#9fb0c2; --ink:#e6edf3; --grid:#1c2633; --subgrid:#131a23; --warn:#ef4444;
+  }
+  html, body { height:100%; margin:0; background:#0b0f14; color:var(--ink); }
+  body { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .wrap { position:relative; height:100vh; width:100vw; overflow:hidden; }
+  .stage { position:absolute; inset:0; }
+  svg { display:block; width:100%; height:100%; }
+  .title {
+    position:absolute; top:1rem; left:1rem; padding:.35rem .65rem;
+    border:1px solid #1d2634; border-radius:.6rem; background:#0f162280;
+    font-size:13px; color:var(--muted); letter-spacing:.02em;
+  }
+  .toolbar {
+    position:absolute; top:1rem; right:1rem;
+    display:flex; gap:.5rem; background:#0f162280;
+    border:1px solid #1d2634; border-radius:.6rem; padding:.45rem .6rem;
+    align-items:center;
+  }
+  .toolbar button {
+    background:#141b27; color:var(--ink); border:1px solid #1d2634;
+    padding:.35rem .6rem; border-radius:.45rem; cursor:pointer;
+    transition:border-color .2s;
+  }
+  .toolbar button:hover { border-color:#27374f; }
+  .toolbar button:disabled { opacity:.5; cursor:not-allowed; }
+  .pill { padding:.25rem .6rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); font-size:12px; }
+  .hint {
+    position:absolute; left:1rem; bottom:1rem;
+    background:#0f1622cc; border:1px solid #1d2634; border-radius:.6rem;
+    padding:.55rem .75rem; font-size:13px; color:var(--muted); max-width:320px; line-height:1.4;
+  }
+  .legend {
+    position:absolute; right:1rem; bottom:1rem;
+    background:#0f162280; border:1px solid #1d2634; border-radius:.6rem;
+    padding:.55rem .8rem; font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:.35rem;
+  }
+  .legend .swatch {
+    display:inline-block; width:14px; height:6px; margin-right:.5rem; border-radius:999px;
+  }
+  .legend .swatch-ref { background:var(--accent); }
+  .legend .swatch-eff { background:var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">Rotation — Connected Structures</div>
+  <div class="toolbar">
+    <button id="rot-add">Add</button>
+    <button id="rot-rem">Remove</button>
+    <span class="pill" id="rot-count">0 structures</span>
+  </div>
+  <div class="stage">
+    <svg id="scene-rot" viewBox="0 0 1200 700" aria-label="rotation playground">
+      <defs>
+        <pattern id="subgrid-rot" width="25" height="25" patternUnits="userSpaceOnUse">
+          <path d="M25 0H0V25" fill="none" stroke="var(--subgrid)" stroke-width="1"/>
+        </pattern>
+        <pattern id="grid-rot" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#subgrid-rot)"/>
+          <path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1.2"/>
+        </pattern>
+        <marker id="arrow-rot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+      <rect x="0" y="0" width="1200" height="700" fill="url(#grid-rot)"/>
+      <g>
+        <line x1="600" y1="0"   x2="600" y2="700" stroke="#263140" stroke-width="1.4"/>
+        <line x1="0"   y1="350" x2="1200" y2="350" stroke="#263140" stroke-width="1.4"/>
+        <text x="610" y="20" fill="#3f4a5d" font-size="12">Y</text>
+        <text x="1185" y="365" fill="#3f4a5d" font-size="12" text-anchor="end">X</text>
+      </g>
+      <g id="rot-connections"></g>
+      <g id="rot-bisectors"></g>
+      <g id="rot-reference"></g>
+      <g id="rot-poles"></g>
+      <g id="rot-labels"></g>
+      <g id="rot-angles"></g>
+      <g id="rot-handles"></g>
+    </svg>
+    <div class="hint" id="rot-hint">
+      Drag each red-centred origin to move a structure. Use the turquoise rotation handle to spin it.
+      The green reference line connects the poles; the red effective line is the conductor bisector between neighbours.
+      Δ shows the offset angle between them.
+    </div>
+    <div class="legend">
+      <div><span class="swatch swatch-ref"></span>Reference orientation</div>
+      <div><span class="swatch swatch-eff"></span>Effective orientation</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const WIDTH = 1200;
+  const HEIGHT = 700;
+  const MARGIN = 40;
+  const MAX_STRUCTS = 3;
+  const POLE_HALF = 80;
+
+  const scene = document.getElementById('scene-rot');
+  const gConnections = document.getElementById('rot-connections');
+  const gBisectors = document.getElementById('rot-bisectors');
+  const gReference = document.getElementById('rot-reference');
+  const gPoles = document.getElementById('rot-poles');
+  const gLabels = document.getElementById('rot-labels');
+  const gAngles = document.getElementById('rot-angles');
+  const gHandles = document.getElementById('rot-handles');
+
+  const addBtn = document.getElementById('rot-add');
+  const remBtn = document.getElementById('rot-rem');
+  const countPill = document.getElementById('rot-count');
+
+  function clientToSvg(x, y){
+    const pt = scene.createSVGPoint();
+    pt.x = x; pt.y = y;
+    const p = pt.matrixTransform(scene.getScreenCTM().inverse());
+    return { x: p.x, y: p.y };
+  }
+
+  function clampPoint(pt){
+    return {
+      x: clamp(pt.x, MARGIN, WIDTH - MARGIN),
+      y: clamp(pt.y, MARGIN, HEIGHT - MARGIN)
+    };
+  }
+
+  const RAD2DEG = 180 / Math.PI;
+
+  let structures = [
+    { origin:{ x: 460, y: 360 }, angle: -0.44 },
+    { origin:{ x: 660, y: 360 }, angle: -0.25 },
+    { origin:{ x: 860, y: 360 }, angle:  0.32 }
+  ];
+  let dragState = null;
+
+  function updateButtons(){
+    countPill.textContent = `${structures.length} structure${structures.length===1 ? '' : 's'}`;
+    addBtn.disabled = structures.length >= MAX_STRUCTS;
+    remBtn.disabled = structures.length <= 1;
+  }
+
+  function makeCircle(cx, cy, r, fill, stroke = 'none', strokeWidth = 1.5){
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy);
+    c.setAttribute('r', r);
+    c.setAttribute('fill', fill);
+    c.setAttribute('stroke', stroke);
+    c.setAttribute('stroke-width', strokeWidth);
+    return c;
+  }
+
+  function makeLine(x1, y1, x2, y2, stroke, width, dash = ''){
+    const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    ln.setAttribute('x1', x1);
+    ln.setAttribute('y1', y1);
+    ln.setAttribute('x2', x2);
+    ln.setAttribute('y2', y2);
+    ln.setAttribute('stroke', stroke);
+    ln.setAttribute('stroke-width', width);
+    if (dash) ln.setAttribute('stroke-dasharray', dash);
+    ln.setAttribute('stroke-linecap', 'round');
+    return ln;
+  }
+
+  function makeCrossLines(x, y, size, color, width){
+    const half = size / 2;
+    const lines = [
+      makeLine(x - half, y - half, x + half, y + half, color, width),
+      makeLine(x - half, y + half, x + half, y - half, color, width)
+    ];
+    lines.forEach(line => line.setAttribute('stroke-linecap', 'round'));
+    return lines;
+  }
+
+  function polePositions(structure){
+    const dx = Math.cos(structure.angle) * POLE_HALF;
+    const dy = Math.sin(structure.angle) * POLE_HALF;
+    return [
+      { x: structure.origin.x - dx, y: structure.origin.y - dy },
+      { x: structure.origin.x + dx, y: structure.origin.y + dy }
+    ];
+  }
+
+  function angleBetween(dirA, dirB){
+    const dot = Math.abs(dirA.x * dirB.x + dirA.y * dirB.y);
+    const clamped = Math.min(1, Math.max(-1, dot));
+    return Math.acos(clamped) * RAD2DEG;
+  }
+
+  function startDrag(type, structure, pointerId, extra = {}){
+    dragState = { type, structure, pointerId, ...extra };
+    try {
+      scene.setPointerCapture(pointerId);
+    } catch (err) {
+      // ignore environments that disallow capture
+    }
+  }
+
+  function finishDrag(pointerId){
+    if (!dragState || dragState.pointerId !== pointerId) return;
+    try {
+      scene.releasePointerCapture(pointerId);
+    } catch (err) {
+      // ignore release issues when pointer already freed
+    }
+    dragState = null;
+  }
+
+  function drawBisector(idx, orientationData){
+    if (idx <= 0 || idx >= orientationData.length - 1) return null;
+    const prev = orientationData[idx - 1].structure;
+    const midStruct = orientationData[idx].structure;
+    const next = orientationData[idx + 1].structure;
+
+    const v1 = { x: prev.origin.x - midStruct.origin.x, y: prev.origin.y - midStruct.origin.y };
+    const v2 = { x: next.origin.x - midStruct.origin.x, y: next.origin.y - midStruct.origin.y };
+
+    const len1 = Math.hypot(v1.x, v1.y);
+    const len2 = Math.hypot(v2.x, v2.y);
+    if (len1 < 1e-3 || len2 < 1e-3) return null;
+
+    v1.x /= len1; v1.y /= len1;
+    v2.x /= len2; v2.y /= len2;
+
+    let bis = { x: v1.x + v2.x, y: v1.y + v2.y };
+    let bisLen = Math.hypot(bis.x, bis.y);
+    if (bisLen < 1e-3){
+      bis = { x: -v1.y, y: v1.x }; // fallback to perpendicular when vectors oppose each other
+      bisLen = Math.hypot(bis.x, bis.y);
+    }
+    bis.x /= bisLen;
+    bis.y /= bisLen;
+
+    const span = 1600;
+    const line = makeLine(
+      midStruct.origin.x - bis.x * span,
+      midStruct.origin.y - bis.y * span,
+      midStruct.origin.x + bis.x * span,
+      midStruct.origin.y + bis.y * span,
+      'var(--warn)', 2.7
+    );
+    line.classList.add('effective');
+    line.setAttribute('pointer-events', 'none');
+    gBisectors.appendChild(line);
+
+    const dir = orientationData[idx].dir;
+    const angleDeg = angleBetween(bis, dir);
+    return { origin: midStruct.origin, angleDeg };
+  }
+
+  function attachOriginDrag(handle, structure){
+    handle.addEventListener('pointerdown', (e) => {
+      const p = clientToSvg(e.clientX, e.clientY);
+      const offset = {
+        dx: structure.origin.x - p.x,
+        dy: structure.origin.y - p.y
+      };
+      startDrag('origin', structure, e.pointerId, { offset });
+      draw();
+      e.preventDefault();
+    });
+  }
+
+  function attachRotationDrag(handle, structure){
+    handle.addEventListener('pointerdown', (e) => {
+      startDrag('rotation', structure, e.pointerId);
+      draw();
+      e.preventDefault();
+    });
+  }
+
+  function drawOriginGlyph(structure){
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const crossLines = makeCrossLines(structure.origin.x, structure.origin.y, 14, 'var(--warn)', 2.4);
+    crossLines.forEach(line => group.appendChild(line));
+    group.style.cursor = dragState && dragState.structure === structure && dragState.type === 'origin' ? 'grabbing' : 'grab';
+    attachOriginDrag(group, structure);
+    return group;
+  }
+
+  function draw(){
+    updateButtons();
+    gConnections.innerHTML = '';
+    gBisectors.innerHTML = '';
+    gReference.innerHTML = '';
+    gPoles.innerHTML = '';
+    gLabels.innerHTML = '';
+    gAngles.innerHTML = '';
+    gHandles.innerHTML = '';
+
+    const orientationData = structures.map(structure => ({
+      structure,
+      dir: { x: Math.cos(structure.angle), y: Math.sin(structure.angle) },
+      poles: polePositions(structure)
+    }));
+
+    orientationData.forEach((data, idx) => {
+      if (idx < orientationData.length - 1){
+        const next = orientationData[idx + 1].structure.origin;
+        const ln = makeLine(data.structure.origin.x, data.structure.origin.y, next.x, next.y, '#253345', 1.6);
+        ln.setAttribute('pointer-events', 'none');
+        gConnections.appendChild(ln);
+      }
+    });
+
+    orientationData.forEach((data, idx) => {
+      const [poleA, poleB] = data.poles;
+      const refLine = makeLine(poleA.x, poleA.y, poleB.x, poleB.y, 'var(--accent)', 3);
+      refLine.setAttribute('pointer-events', 'none');
+      gReference.appendChild(refLine);
+
+      const poleRadius = 7.2;
+      const poleAEl = makeCircle(poleA.x, poleA.y, poleRadius, '#142030', 'var(--accent)', 2);
+      const poleBEl = makeCircle(poleB.x, poleB.y, poleRadius, '#142030', 'var(--accent)', 2);
+      poleAEl.style.cursor = dragState && dragState.structure === data.structure && dragState.type === 'rotation' ? 'grabbing' : 'grab';
+      poleBEl.style.cursor = dragState && dragState.structure === data.structure && dragState.type === 'rotation' ? 'grabbing' : 'grab';
+      attachRotationDrag(poleAEl, data.structure);
+      attachRotationDrag(poleBEl, data.structure);
+      gPoles.appendChild(poleAEl);
+      gPoles.appendChild(poleBEl);
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', data.structure.origin.x + 14);
+      label.setAttribute('y', data.structure.origin.y - 16);
+      label.setAttribute('fill', '#9fb0c2');
+      label.setAttribute('font-size', '12');
+      label.setAttribute('pointer-events', 'none');
+      label.textContent = `S${idx + 1}`;
+      gLabels.appendChild(label);
+
+      const originGlyph = drawOriginGlyph(data.structure);
+      gHandles.appendChild(originGlyph);
+    });
+
+    orientationData.forEach((data, idx) => {
+      const info = drawBisector(idx, orientationData);
+      if (info){
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', info.origin.x + 14);
+        text.setAttribute('y', info.origin.y + 16);
+        text.setAttribute('fill', 'var(--warn)');
+        text.setAttribute('font-size', '12');
+        text.setAttribute('pointer-events', 'none');
+        text.textContent = `Δ ${info.angleDeg.toFixed(1)}°`;
+        gAngles.appendChild(text);
+      }
+    });
+  }
+
+  scene.addEventListener('pointermove', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const p = clientToSvg(e.clientX, e.clientY);
+    if (dragState.type === 'origin'){
+      const offset = dragState.offset || { dx:0, dy:0 };
+      const next = {
+        x: p.x + offset.dx,
+        y: p.y + offset.dy
+      };
+      const clamped = clampPoint(next);
+      dragState.structure.origin.x = clamped.x;
+      dragState.structure.origin.y = clamped.y;
+    } else if (dragState.type === 'rotation'){
+      const vector = {
+        x: p.x - dragState.structure.origin.x,
+        y: p.y - dragState.structure.origin.y
+      };
+      if (Math.hypot(vector.x, vector.y) > 1e-3){
+        dragState.structure.angle = Math.atan2(vector.y, vector.x);
+      }
+    }
+    draw();
+  });
+
+  scene.addEventListener('pointerup', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    finishDrag(e.pointerId);
+    draw();
+  });
+  scene.addEventListener('pointercancel', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    finishDrag(e.pointerId);
+    draw();
+  });
+
+  addBtn.addEventListener('click', () => {
+    if (structures.length >= MAX_STRUCTS) return;
+    const last = structures[structures.length - 1];
+    const prev = structures.length >= 2 ? structures[structures.length - 2] : null;
+    const dx = prev ? last.origin.x - prev.origin.x : 180;
+    const offsetX = Math.abs(dx) > 5 ? dx : 180;
+    const proposedOrigin = {
+      x: clamp(last.origin.x + offsetX, MARGIN, WIDTH - MARGIN),
+      y: clamp(last.origin.y, MARGIN, HEIGHT - MARGIN)
+    };
+    structures.push({
+      origin: proposedOrigin,
+      angle: last.angle
+    });
+    draw();
+  });
+
+  remBtn.addEventListener('click', () => {
+    if (structures.length <= 1) return;
+    structures.pop();
+    draw();
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>
