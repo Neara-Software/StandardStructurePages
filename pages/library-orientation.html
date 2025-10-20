@@ -7,42 +7,56 @@
 <link rel="stylesheet" href="../assets/style.css">
 <style>
   :root { --accent:#2dd4bf; --pole:#60a5fa; --first:#f59e0b; --last:#f43f5e; --muted:#9fb0c2; --ink:#e6edf3; --grid:#1c2633; --subgrid:#131a23; }
-  .wrap { display:grid; grid-template-rows:auto 1fr; height:100vh; }
-  header { display:flex; align-items:center; gap:.5rem; padding:.75rem 1rem; border-bottom:1px solid #0f1622; background:linear-gradient(180deg,#0e141d,#0b1017); position:sticky; top:0; z-index:2; }
-  header h1 { font-size:14px; font-weight:600; margin:0 .75rem 0 0; color:var(--muted); letter-spacing:.2px; }
+
+  html, body { height:100%; margin:0; overflow:hidden; } /* no scroll */
+  /* two-column layout: stage | sidebar */
+  .wrap {
+    display:grid;
+    grid-template-columns: 1fr 280px;
+    grid-template-rows: 100vh;
+    height:100vh;
+    width:100vw;
+  }
+
+  /* left stage with diagram */
+  .stage { position:relative; height:100%; background:#0b0f14; }
+  svg { display:block; width:100%; height:100%; }
+
+  /* right sidebar with actions */
+  .sidebar {
+    display:flex; flex-direction:column; gap:.75rem;
+    padding:1rem; border-left:1px solid #0f1622;
+    background:linear-gradient(180deg,#0e141d,#0b1017);
+  }
+  .sidebar h2 { font-size:13px; font-weight:600; color:var(--muted); margin:0 0 .25rem 0; }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
   button { background:#141b27; color:var(--ink); border:1px solid #1d2634; padding:.45rem .7rem; border-radius:.5rem; cursor:pointer; }
   button:hover { border-color:#2b3a53; }
   button:disabled { opacity:.5; cursor:not-allowed; }
-  .pill { padding:.3rem .55rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); }
-  .stage { position:relative; }
-  svg { display:block; width:100%; height:100%; }
-  .legend { position:absolute; top:1rem; right:1rem; color:var(--muted); font-size:12px; text-align:right; }
-  .legend span { display:inline-block; margin-left:.75rem; }
-  .badge { display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .45rem; border:1px solid #1d2634; background:#0f1622; border-radius:.4rem; }
-  .dot { width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
-  .angle { position:absolute; left:1rem; bottom:1rem; background:#0f1622cc; backdrop-filter: blur(6px); border:1px solid #1d2634; padding:.5rem .65rem; border-radius:.6rem; color:var(--ink); }
-  .note { font-size:12px; color:var(--muted); margin-left:.5rem; }
-  .compass-box { position:absolute; right:1rem; bottom:1rem; width:140px; height:140px; border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc; }
-  .empty-hint { position:absolute; inset:auto 1rem 1rem auto; color:var(--muted); font-size:12px; }
+  .pill { padding:.28rem .6rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); line-height:1.35; }
+
+  /* on-canvas HUD */
+  .angle {
+    position:absolute; left:1rem; bottom:1rem;
+    background:#0f1622cc; backdrop-filter: blur(6px);
+    border:1px solid #1d2634; padding:.5rem .65rem;
+    border-radius:.6rem; color:var(--ink);
+  }
+  .compass-box {
+    position:absolute; right:1rem; bottom:1rem;
+    width:140px; height:140px;
+    border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc;
+  }
+  .hint {
+    position:absolute; left:1rem; top:1rem; font-size:12px; color:var(--muted);
+    background:#0f162280; border:1px solid #1d2634; border-radius:.5rem; padding:.35rem .5rem;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <a class="btn" href="../index.html">← Back</a>
-    <h1>Library Orientation — First→Last vs Transverse (Y)</h1>
-    <button id="addBtn">Add pole</button>
-    <button id="removeBtn">Remove pole</button>
-    <span class="pill" id="countPill">0 poles</span>
-    <span class="note">Drag circles to move poles. Green line: 0 poles = none, 1 pole = along Y (transverse), 2–4 poles = first→last.</span>
-    <span class="legend">
-      <span class="badge"><span class="dot" style="background:var(--first)"></span>First</span>
-      <span class="badge"><span class="dot" style="background:var(--last)"></span>Last</span>
-      <span class="badge"><span class="dot" style="background:var(--pole)"></span>Intermediate</span>
-      <span class="badge"><span class="dot" style="background:var(--accent)"></span>Reference vector</span>
-    </span>
-  </header>
-
+  <!-- LEFT: diagram -->
   <div class="stage" id="stage">
     <svg id="scene" viewBox="0 0 1200 700" aria-label="grid scene">
       <defs>
@@ -58,38 +72,58 @@
         </marker>
       </defs>
 
+      <!-- background grid -->
       <rect x="0" y="0" width="1200" height="700" fill="url(#grid)"/>
 
       <!-- axes (X longitudinal, Y transverse) -->
       <g id="axes">
-        <line x1="600" y1="0" x2="600" y2="700" stroke="#334155" stroke-width="1.5"/>
-        <line x1="0" y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
-        <text x="610" y="20" fill="var(--muted)" font-size="12">Y (Transverse)</text>
+        <line x1="600" y1="0"   x2="600" y2="700" stroke="#334155" stroke-width="1.5"/>
+        <line x1="0"   y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
+        <text x="610"  y="20"  fill="var(--muted)" font-size="12">Y (Transverse)</text>
         <text x="1180" y="365" fill="var(--muted)" font-size="12" text-anchor="end">X (Longitudinal)</text>
       </g>
 
+      <!-- dynamic layers -->
       <g id="connections"></g>
       <g id="greenVector"></g>
       <g id="poles"></g>
     </svg>
 
+    <!-- HUD -->
+    <div class="hint" id="hint"></div>
     <div class="angle" id="angleBox">Angle to transverse (Y): <b>—</b></div>
-    <div class="empty-hint" id="emptyHint"></div>
 
+    <!-- Compass (bottom-right) -->
     <div class="compass-box">
       <svg id="compass" viewBox="-60 -60 120 120" width="140" height="140">
         <rect x="-60" y="-60" width="120" height="120" fill="none"/>
-        <g fill="var(--muted)" font-size="8" text-anchor="middle" dominant-baseline="middle">
+        <g fill="#9fb0c2" font-size="8" text-anchor="middle" dominant-baseline="middle">
           <line x1="-50" y1="0" x2="50" y2="0" stroke="#334155" stroke-width="1"/>
           <line x1="0" y1="-50" x2="0" y2="50" stroke="#334155" stroke-width="1"/>
           <text x="40" y="10">X</text>
-          <text x="8" y="-40">Y</text>
+          <text x="8"  y="-40">Y</text>
         </g>
         <path id="wedge" d="" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>
         <line id="dirLine" x1="0" y1="0" x2="0" y2="-45" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)"/>
       </svg>
     </div>
   </div>
+
+  <!-- RIGHT: actions -->
+  <aside class="sidebar">
+    <h2>Actions</h2>
+    <div class="row">
+      <button id="addBtn">Add pole</button>
+      <button id="removeBtn">Remove pole</button>
+    </div>
+    <div class="row">
+      <span class="pill" id="countPill">0 poles</span>
+    </div>
+    <p class="note">
+      Green line: <code>0</code> = none, <code>1</code> = along Y (transverse), <code>2–4</code> = first→last.<br>
+      Angle is measured to the transverse (Y) axis.
+    </p>
+  </aside>
 </div>
 
 <script>
@@ -99,17 +133,17 @@
   const connections = document.getElementById('connections');
   const greenVector = document.getElementById('greenVector');
   const angleBox = document.getElementById('angleBox');
-  const emptyHint = document.getElementById('emptyHint');
+  const hint = document.getElementById('hint');
+
   const addBtn = document.getElementById('addBtn');
   const removeBtn = document.getElementById('removeBtn');
   const countPill = document.getElementById('countPill');
+
   const wedge = document.getElementById('wedge');
   const dirLine = document.getElementById('dirLine');
 
-  // Start with zero poles for your demo case
-  let poles = []; // e.g., try: [{x:300,y:400}]
+  let poles = []; // supports 0..4
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
   const rad2deg = r => r * (180 / Math.PI);
   const wrapPI = x => { const t=2*Math.PI; return ((x + Math.PI) % t + t) % t - Math.PI; };
 
@@ -118,24 +152,20 @@
   }
 
   function angleToTransverseDegFromVec(dx, dy){
-    // y-up math coords
-    const ux = dx, uy = -dy;
+    const ux = dx, uy = -dy; // y-up math coords
     const len = Math.hypot(ux, uy) || 1;
     const cos = Math.abs(uy) / len;
     return rad2deg(Math.acos(Math.max(-1, Math.min(1, cos))));
   }
 
   function updateCompassFromAngle(phi){
-    // draw arc from +Y to direction phi (screen coords)
-    const start = -Math.PI/2;
+    const start = -Math.PI/2; // +Y axis
     let d = wrapPI(phi - start);
     const max = Math.PI/2; d = Math.max(-max, Math.min(max, d));
-
     const r = 42;
     const x0 = r * Math.cos(start),  y0 = r * Math.sin(start);
     const x1 = r * Math.cos(start + d), y1 = r * Math.sin(start + d);
     wedge.setAttribute('d', `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 ${d>=0?1:0} ${x1.toFixed(2)} ${y1.toFixed(2)}`);
-
     const rLine = 45;
     dirLine.setAttribute('x2', (rLine * Math.cos(phi)).toFixed(2));
     dirLine.setAttribute('y2', (rLine * Math.sin(phi)).toFixed(2));
@@ -143,53 +173,43 @@
 
   function draw(){
     setCountPill();
-
     // clear layers
     connections.innerHTML = '';
     greenVector.innerHTML = '';
     polesLayer.innerHTML = '';
 
-    // decide reference vector & UI state based on pole count
     if (poles.length === 0){
       angleBox.innerHTML = 'Angle to transverse (Y): <b>—</b>';
-      emptyHint.textContent = 'No poles yet. Click “Add pole”.';
-      // point compass at +Y (zero angle) for reference
-      updateCompassFromAngle(-Math.PI/2);
+      hint.textContent = 'No poles yet. Use “Add pole”.';
+      updateCompassFromAngle(-Math.PI/2); // default up
     } else if (poles.length === 1){
-      emptyHint.textContent = 'Single pole: reference is along Y (transverse).';
+      hint.textContent = '1 pole: reference = along Y (transverse).';
       const p = poles[0];
-
-      // draw the pole
       drawPole(p, 0, true, true);
 
-      // draw green vector aligned with +Y at the pole's X
+      // reference green line up the Y through the pole X
       const yTop = 50, yBottom = 650;
       drawGreenLine(p.x, yBottom, p.x, yTop);
 
-      // angle is 0°
       angleBox.innerHTML = 'Angle to transverse (Y): <b>0.0°</b>';
-      updateCompassFromAngle(-Math.PI/2); // pointing up (transverse)
+      updateCompassFromAngle(-Math.PI/2);
     } else {
-      emptyHint.textContent = '';
+      hint.textContent = '';
 
-      // connections between sequential poles
+      // connections and poles
       for (let i=0;i<poles.length-1;i++){
-        const a = poles[i], b = poles[i+1];
-        drawConnection(a, b);
+        drawConnection(poles[i], poles[i+1]);
       }
-
-      // poles and labels
       poles.forEach((p, idx) => drawPole(p, idx, idx===0, idx===poles.length-1));
 
-      // vector: first → last
+      // first → last reference
       const first = poles[0], last = poles[poles.length-1];
       drawGreenLine(first.x, first.y, last.x, last.y);
 
       const dx = last.x - first.x, dy = last.y - first.y;
       const deg = angleToTransverseDegFromVec(dx, dy).toFixed(1);
       angleBox.innerHTML = `Angle to transverse (Y): <b>${deg}°</b>`;
-      const phi = Math.atan2(dy, dx);
-      updateCompassFromAngle(phi);
+      updateCompassFromAngle(Math.atan2(dy, dx));
     }
 
     updateButtons();
@@ -222,7 +242,7 @@
 
     const t = document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
-    t.setAttribute('fill', 'var(--muted)'); t.setAttribute('font-size', '12');
+    t.setAttribute('fill', '#9fb0c2'); t.setAttribute('font-size', '12');
     t.textContent = `P${idx+1}`; polesLayer.appendChild(t);
   }
 
@@ -247,13 +267,12 @@
     return { x: p.x, y: p.y };
   }
 
-  // Controls: allow 0..4 poles
+  // Sidebar controls: allow 0..4 poles
   addBtn.addEventListener('click', () => {
     if (poles.length >= 4) return;
     if (poles.length === 0){
       poles.push({ x: 600, y: 350 }); // center
     } else if (poles.length === 1){
-      // drop a second pole offset to make vector obvious
       const a = poles[0];
       poles.push({ x: a.x + 200, y: a.y - 100 });
     } else {
@@ -270,21 +289,19 @@
     if (poles.length === 1){
       poles = [];
     } else if (poles.length === 2){
-      // remove last; keep one
       poles.pop();
     } else {
-      // remove last intermediate if exists; otherwise remove last
       poles.splice(poles.length-2, 1);
     }
     draw();
   });
 
   function updateButtons(){
-    document.getElementById('addBtn').disabled = poles.length >= 4;
-    document.getElementById('removeBtn').disabled = poles.length === 0;
+    addBtn.disabled = poles.length >= 4;
+    removeBtn.disabled = poles.length === 0;
   }
 
-  // initial draw
+  // initial render
   draw();
 })();
 </script>
