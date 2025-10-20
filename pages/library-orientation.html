@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Library Orientation</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  :root { --accent:#2dd4bf; --pole:#60a5fa; --first:#f59e0b; --last:#f43f5e; --muted:#9fb0c2; --ink:#e6edf3; --grid:#1c2633; --subgrid:#131a23; }
+  .wrap { display:grid; grid-template-rows:auto 1fr; height:100vh; }
+  header { display:flex; align-items:center; gap:.5rem; padding:.75rem 1rem; border-bottom:1px solid #0f1622; background:linear-gradient(180deg,#0e141d,#0b1017); position:sticky; top:0; z-index:2; }
+  header h1 { font-size:14px; font-weight:600; margin:0 .75rem 0 0; color:var(--muted); letter-spacing:.2px; }
+  button { background:#141b27; color:var(--ink); border:1px solid #1d2634; padding:.45rem .7rem; border-radius:.5rem; cursor:pointer; }
+  button:hover { border-color:#2b3a53; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .pill { padding:.3rem .55rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); }
+  .stage { position:relative; }
+  svg { display:block; width:100%; height:100%; }
+  .legend { position:absolute; top:1rem; right:1rem; color:var(--muted); font-size:12px; text-align:right; }
+  .legend span { display:inline-block; margin-left:.75rem; }
+  .badge { display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .45rem; border:1px solid #1d2634; background:#0f1622; border-radius:.4rem; }
+  .dot { width:.6rem; height:.6rem; border-radius:50%; display:inline-block; }
+  .angle { position:absolute; left:1rem; bottom:1rem; background:#0f1622cc; backdrop-filter: blur(6px); border:1px solid #1d2634; padding:.5rem .65rem; border-radius:.6rem; color:var(--ink); }
+  .note { font-size:12px; color:var(--muted); margin-left:.5rem; }
+  .compass-box { position:absolute; right:1rem; bottom:1rem; width:140px; height:140px; border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="btn" href="../index.html">← Back</a>
+    <h1>Library Orientation — First→Last vs Transverse (Y)</h1>
+    <button id="addBtn">Add pole</button>
+    <button id="removeBtn">Remove pole</button>
+    <span class="pill" id="countPill">2 poles</span>
+    <span class="note">Drag circles to move poles. Green line = first → last. Angle measured to transverse (Y).</span>
+    <span class="legend">
+      <span class="badge"><span class="dot" style="background:var(--first)"></span>First</span>
+      <span class="badge"><span class="dot" style="background:var(--last)"></span>Last</span>
+      <span class="badge"><span class="dot" style="background:var(--pole)"></span>Intermediate</span>
+      <span class="badge"><span class="dot" style="background:var(--accent)"></span>First→Last vector</span>
+    </span>
+  </header>
+
+  <div class="stage" id="stage">
+    <svg id="scene" viewBox="0 0 1200 700" aria-label="grid scene">
+      <defs>
+        <pattern id="subgrid" width="25" height="25" patternUnits="userSpaceOnUse">
+          <path d="M25 0H0V25" fill="none" stroke="var(--subgrid)" stroke-width="1"/>
+        </pattern>
+        <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#subgrid)"/>
+          <path d="M100 0H0V100" fill="none" stroke="var(--grid)" stroke-width="1.2"/>
+        </pattern>
+        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+        </marker>
+      </defs>
+
+      <rect x="0" y="0" width="1200" height="700" fill="url(#grid)"/>
+
+      <!-- axes (X longitudinal, Y transverse) -->
+      <g id="axes">
+        <line x1="600" y1="0" x2="600" y2="700" stroke="#334155" stroke-width="1.5"/>
+        <line x1="0" y1="350" x2="1200" y2="350" stroke="#334155" stroke-width="1.5"/>
+        <text x="610" y="20" fill="var(--muted)" font-size="12">Y (Transverse)</text>
+        <text x="1180" y="365" fill="var(--muted)" font-size="12" text-anchor="end">X (Longitudinal)</text>
+      </g>
+
+      <g id="connections"></g>
+      <g id="greenVector"></g>
+      <g id="poles"></g>
+    </svg>
+
+    <div class="angle" id="angleBox">Angle to transverse (Y): <b>0.0°</b></div>
+
+    <div class="compass-box">
+      <svg id="compass" viewBox="-60 -60 120 120" width="140" height="140">
+        <rect x="-60" y="-60" width="120" height="120" fill="none"/>
+        <g fill="var(--muted)" font-size="8" text-anchor="middle" dominant-baseline="middle">
+          <line x1="-50" y1="0" x2="50" y2="0" stroke="#334155" stroke-width="1"/>
+          <line x1="0" y1="-50" x2="0" y2="50" stroke="#334155" stroke-width="1"/>
+          <text x="40" y="10">X</text>
+          <text x="8" y="-40">Y</text>
+        </g>
+        <path id="wedge" d="" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>
+        <line id="dirLine" x1="0" y1="0" x2="0" y2="-45" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrow)"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const scene = document.getElementById('scene');
+  const polesLayer = document.getElementById('poles');
+  const connections = document.getElementById('connections');
+  const greenVector = document.getElementById('greenVector');
+  const angleBox = document.getElementById('angleBox');
+  const addBtn = document.getElementById('addBtn');
+  const removeBtn = document.getElementById('removeBtn');
+  const countPill = document.getElementById('countPill');
+
+  const wedge = document.getElementById('wedge');
+  const dirLine = document.getElementById('dirLine');
+
+  let poles = [ { x: 300, y: 400 }, { x: 900, y: 300 } ];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rad2deg = r => r * (180 / Math.PI);
+
+  function setCountPill(){ countPill.textContent = \`\${poles.length} pole\${poles.length>1?'s':''}\`; }
+
+  function angleToTransverseDeg(p1, p2){
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const ux = dx, uy = -dy; // y-up math coords
+    const len = Math.hypot(ux, uy) || 1;
+    const cos = Math.abs(uy) / len;
+    return rad2deg(Math.acos(Math.max(-1, Math.min(1, cos))));
+  }
+
+  function wrapPI(x){ const t=2*Math.PI; return ((x + Math.PI) % t + t) % t - Math.PI; }
+
+  function updateCompass(p1, p2){
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    let phi = Math.atan2(dy, dx);   // screen coords
+    let start = -Math.PI/2;         // +Y axis
+    let d = wrapPI(phi - start);
+    const max = Math.PI/2; d = Math.max(-max, Math.min(max, d));
+
+    const r = 42;
+    const x0 = r * Math.cos(start),  y0 = r * Math.sin(start);
+    const x1 = r * Math.cos(start + d), y1 = r * Math.sin(start + d);
+    wedge.setAttribute('d', \`M \${x0.toFixed(2)} \${y0.toFixed(2)} A \${r} \${r} 0 0 \${d>=0?1:0} \${x1.toFixed(2)} \${y1.toFixed(2)}\`);
+
+    const rLine = 45;
+    dirLine.setAttribute('x2', (rLine * Math.cos(phi)).toFixed(2));
+    dirLine.setAttribute('y2', (rLine * Math.sin(phi)).toFixed(2));
+
+    const deg = angleToTransverseDeg(p1, p2).toFixed(1);
+    angleBox.innerHTML = \`Angle to transverse (Y): <b>\${deg}°</b>\`;
+  }
+
+  function draw(){
+    setCountPill();
+    const first = poles[0], last = poles[poles.length - 1];
+
+    // vector: first → last
+    greenVector.innerHTML = '';
+    const gLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+    gLine.setAttribute('x1', first.x); gLine.setAttribute('y1', first.y);
+    gLine.setAttribute('x2', last.x);  gLine.setAttribute('y2', last.y);
+    gLine.setAttribute('stroke','var(--accent)'); gLine.setAttribute('stroke-width',3);
+    gLine.setAttribute('marker-end','url(#arrow)');
+    greenVector.appendChild(gLine);
+
+    // intermediate connections
+    connections.innerHTML = '';
+    for (let i=0;i<poles.length-1;i++){
+      const a=poles[i], b=poles[i+1];
+      const seg = document.createElementNS('http://www.w3.org/2000/svg','line');
+      seg.setAttribute('x1', a.x); seg.setAttribute('y1', a.y);
+      seg.setAttribute('x2', b.x); seg.setAttribute('y2', b.y);
+      seg.setAttribute('stroke', '#2a3342'); seg.setAttribute('stroke-width', 1.2);
+      connections.appendChild(seg);
+    }
+
+    // poles
+    polesLayer.innerHTML = '';
+    poles.forEach((p, idx) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+      c.setAttribute('r', idx===0||idx===poles.length-1 ? 10 : 8);
+      c.setAttribute('fill', idx===0 ? 'var(--first)' : (idx===poles.length-1 ? 'var(--last)' : 'var(--pole)'));
+      c.style.cursor='grab'; c.dataset.index = idx.toString();
+      makeDraggable(c); polesLayer.appendChild(c);
+
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
+      t.setAttribute('fill', 'var(--muted)'); t.setAttribute('font-size', '12');
+      t.textContent = \`P\${idx+1}\`; polesLayer.appendChild(t);
+    });
+
+    updateCompass(first, last);
+  }
+
+  function makeDraggable(el){
+    let dragging=false, idx=+el.dataset.index;
+    const down = (e)=>{ dragging=true; idx=+el.dataset.index; el.style.cursor='grabbing'; el.setPointerCapture?.(e.pointerId); };
+    const move = (e)=>{ if(!dragging) return;
+      const pt = clientToSvg(e.clientX, e.clientY);
+      poles[idx].x = clamp(pt.x, 10, 1190);
+      poles[idx].y = clamp(pt.y, 10, 690);
+      draw();
+    };
+    const up = (e)=>{ dragging=false; el.style.cursor='grab'; el.releasePointerCapture?.(e.pointerId); };
+    el.addEventListener('pointerdown', down);
+    scene.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  function clientToSvg(clientX, clientY){
+    const pt = scene.createSVGPoint(); pt.x = clientX; pt.y = clientY;
+    const p = pt.matrixTransform(scene.getScreenCTM().inverse());
+    return { x: p.x, y: p.y };
+  }
+
+  document.getElementById('addBtn').addEventListener('click', () => {
+    if (poles.length >= 4) return;
+    const last = poles[poles.length-1], prev = poles[poles.length-2];
+    const nx = prev ? prev.x + 0.6*(last.x - prev.x) : last.x + 60;
+    const ny = prev ? prev.y + 0.6*(last.y - prev.y) : last.y;
+    poles.splice(poles.length-1, 0, { x: nx, y: ny });
+    draw(); updateButtons();
+  });
+
+  document.getElementById('removeBtn').addEventListener('click', () => {
+    if (poles.length <= 2) return;
+    poles.splice(poles.length-2, 1);
+    draw(); updateButtons();
+  });
+
+  function updateButtons(){
+    document.getElementById('addBtn').disabled = poles.length >= 4;
+    document.getElementById('removeBtn').disabled = poles.length <= 2;
+  }
+
+  updateButtons(); draw();
+})();
+</script>
+</body>
+</html>
