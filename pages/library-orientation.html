@@ -23,6 +23,7 @@
   .angle { position:absolute; left:1rem; bottom:1rem; background:#0f1622cc; backdrop-filter: blur(6px); border:1px solid #1d2634; padding:.5rem .65rem; border-radius:.6rem; color:var(--ink); }
   .note { font-size:12px; color:var(--muted); margin-left:.5rem; }
   .compass-box { position:absolute; right:1rem; bottom:1rem; width:140px; height:140px; border:1px solid #1d2634; border-radius:.6rem; background:#0f1622cc; }
+  .empty-hint { position:absolute; inset:auto 1rem 1rem auto; color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
@@ -32,13 +33,13 @@
     <h1>Library Orientation — First→Last vs Transverse (Y)</h1>
     <button id="addBtn">Add pole</button>
     <button id="removeBtn">Remove pole</button>
-    <span class="pill" id="countPill">2 poles</span>
-    <span class="note">Drag circles to move poles. Green line = first → last. Angle measured to transverse (Y).</span>
+    <span class="pill" id="countPill">0 poles</span>
+    <span class="note">Drag circles to move poles. Green line: 0 poles = none, 1 pole = along Y (transverse), 2–4 poles = first→last.</span>
     <span class="legend">
       <span class="badge"><span class="dot" style="background:var(--first)"></span>First</span>
       <span class="badge"><span class="dot" style="background:var(--last)"></span>Last</span>
       <span class="badge"><span class="dot" style="background:var(--pole)"></span>Intermediate</span>
-      <span class="badge"><span class="dot" style="background:var(--accent)"></span>First→Last vector</span>
+      <span class="badge"><span class="dot" style="background:var(--accent)"></span>Reference vector</span>
     </span>
   </header>
 
@@ -72,7 +73,8 @@
       <g id="poles"></g>
     </svg>
 
-    <div class="angle" id="angleBox">Angle to transverse (Y): <b>0.0°</b></div>
+    <div class="angle" id="angleBox">Angle to transverse (Y): <b>—</b></div>
+    <div class="empty-hint" id="emptyHint"></div>
 
     <div class="compass-box">
       <svg id="compass" viewBox="-60 -60 120 120" width="140" height="140">
@@ -97,90 +99,131 @@
   const connections = document.getElementById('connections');
   const greenVector = document.getElementById('greenVector');
   const angleBox = document.getElementById('angleBox');
+  const emptyHint = document.getElementById('emptyHint');
   const addBtn = document.getElementById('addBtn');
   const removeBtn = document.getElementById('removeBtn');
   const countPill = document.getElementById('countPill');
-
   const wedge = document.getElementById('wedge');
   const dirLine = document.getElementById('dirLine');
 
-  let poles = [ { x: 300, y: 400 }, { x: 900, y: 300 } ];
+  // Start with zero poles for your demo case
+  let poles = []; // e.g., try: [{x:300,y:400}]
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
   const rad2deg = r => r * (180 / Math.PI);
+  const wrapPI = x => { const t=2*Math.PI; return ((x + Math.PI) % t + t) % t - Math.PI; };
 
-  function setCountPill(){ countPill.textContent = \`\${poles.length} pole\${poles.length>1?'s':''}\`; }
+  function setCountPill(){
+    countPill.textContent = `${poles.length} pole${poles.length===1?'':'s'}`;
+  }
 
-  function angleToTransverseDeg(p1, p2){
-    const dx = p2.x - p1.x, dy = p2.y - p1.y;
-    const ux = dx, uy = -dy; // y-up math coords
+  function angleToTransverseDegFromVec(dx, dy){
+    // y-up math coords
+    const ux = dx, uy = -dy;
     const len = Math.hypot(ux, uy) || 1;
     const cos = Math.abs(uy) / len;
     return rad2deg(Math.acos(Math.max(-1, Math.min(1, cos))));
   }
 
-  function wrapPI(x){ const t=2*Math.PI; return ((x + Math.PI) % t + t) % t - Math.PI; }
-
-  function updateCompass(p1, p2){
-    const dx = p2.x - p1.x, dy = p2.y - p1.y;
-    let phi = Math.atan2(dy, dx);   // screen coords
-    let start = -Math.PI/2;         // +Y axis
+  function updateCompassFromAngle(phi){
+    // draw arc from +Y to direction phi (screen coords)
+    const start = -Math.PI/2;
     let d = wrapPI(phi - start);
     const max = Math.PI/2; d = Math.max(-max, Math.min(max, d));
 
     const r = 42;
     const x0 = r * Math.cos(start),  y0 = r * Math.sin(start);
     const x1 = r * Math.cos(start + d), y1 = r * Math.sin(start + d);
-    wedge.setAttribute('d', \`M \${x0.toFixed(2)} \${y0.toFixed(2)} A \${r} \${r} 0 0 \${d>=0?1:0} \${x1.toFixed(2)} \${y1.toFixed(2)}\`);
+    wedge.setAttribute('d', `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 ${d>=0?1:0} ${x1.toFixed(2)} ${y1.toFixed(2)}`);
 
     const rLine = 45;
     dirLine.setAttribute('x2', (rLine * Math.cos(phi)).toFixed(2));
     dirLine.setAttribute('y2', (rLine * Math.sin(phi)).toFixed(2));
-
-    const deg = angleToTransverseDeg(p1, p2).toFixed(1);
-    angleBox.innerHTML = \`Angle to transverse (Y): <b>\${deg}°</b>\`;
   }
 
   function draw(){
     setCountPill();
-    const first = poles[0], last = poles[poles.length - 1];
 
-    // vector: first → last
+    // clear layers
+    connections.innerHTML = '';
     greenVector.innerHTML = '';
+    polesLayer.innerHTML = '';
+
+    // decide reference vector & UI state based on pole count
+    if (poles.length === 0){
+      angleBox.innerHTML = 'Angle to transverse (Y): <b>—</b>';
+      emptyHint.textContent = 'No poles yet. Click “Add pole”.';
+      // point compass at +Y (zero angle) for reference
+      updateCompassFromAngle(-Math.PI/2);
+    } else if (poles.length === 1){
+      emptyHint.textContent = 'Single pole: reference is along Y (transverse).';
+      const p = poles[0];
+
+      // draw the pole
+      drawPole(p, 0, true, true);
+
+      // draw green vector aligned with +Y at the pole's X
+      const yTop = 50, yBottom = 650;
+      drawGreenLine(p.x, yBottom, p.x, yTop);
+
+      // angle is 0°
+      angleBox.innerHTML = 'Angle to transverse (Y): <b>0.0°</b>';
+      updateCompassFromAngle(-Math.PI/2); // pointing up (transverse)
+    } else {
+      emptyHint.textContent = '';
+
+      // connections between sequential poles
+      for (let i=0;i<poles.length-1;i++){
+        const a = poles[i], b = poles[i+1];
+        drawConnection(a, b);
+      }
+
+      // poles and labels
+      poles.forEach((p, idx) => drawPole(p, idx, idx===0, idx===poles.length-1));
+
+      // vector: first → last
+      const first = poles[0], last = poles[poles.length-1];
+      drawGreenLine(first.x, first.y, last.x, last.y);
+
+      const dx = last.x - first.x, dy = last.y - first.y;
+      const deg = angleToTransverseDegFromVec(dx, dy).toFixed(1);
+      angleBox.innerHTML = `Angle to transverse (Y): <b>${deg}°</b>`;
+      const phi = Math.atan2(dy, dx);
+      updateCompassFromAngle(phi);
+    }
+
+    updateButtons();
+  }
+
+  function drawConnection(a, b){
+    const seg = document.createElementNS('http://www.w3.org/2000/svg','line');
+    seg.setAttribute('x1', a.x); seg.setAttribute('y1', a.y);
+    seg.setAttribute('x2', b.x); seg.setAttribute('y2', b.y);
+    seg.setAttribute('stroke', '#2a3342'); seg.setAttribute('stroke-width', 1.2);
+    connections.appendChild(seg);
+  }
+
+  function drawGreenLine(x1,y1,x2,y2){
     const gLine = document.createElementNS('http://www.w3.org/2000/svg','line');
-    gLine.setAttribute('x1', first.x); gLine.setAttribute('y1', first.y);
-    gLine.setAttribute('x2', last.x);  gLine.setAttribute('y2', last.y);
+    gLine.setAttribute('x1', x1); gLine.setAttribute('y1', y1);
+    gLine.setAttribute('x2', x2); gLine.setAttribute('y2', y2);
     gLine.setAttribute('stroke','var(--accent)'); gLine.setAttribute('stroke-width',3);
     gLine.setAttribute('marker-end','url(#arrow)');
     greenVector.appendChild(gLine);
+  }
 
-    // intermediate connections
-    connections.innerHTML = '';
-    for (let i=0;i<poles.length-1;i++){
-      const a=poles[i], b=poles[i+1];
-      const seg = document.createElementNS('http://www.w3.org/2000/svg','line');
-      seg.setAttribute('x1', a.x); seg.setAttribute('y1', a.y);
-      seg.setAttribute('x2', b.x); seg.setAttribute('y2', b.y);
-      seg.setAttribute('stroke', '#2a3342'); seg.setAttribute('stroke-width', 1.2);
-      connections.appendChild(seg);
-    }
+  function drawPole(p, idx, isFirst, isLast){
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+    c.setAttribute('r', (isFirst||isLast) ? 10 : 8);
+    c.setAttribute('fill', isFirst ? 'var(--first)' : (isLast ? 'var(--last)' : 'var(--pole)'));
+    c.style.cursor='grab'; c.dataset.index = idx.toString();
+    makeDraggable(c); polesLayer.appendChild(c);
 
-    // poles
-    polesLayer.innerHTML = '';
-    poles.forEach((p, idx) => {
-      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
-      c.setAttribute('r', idx===0||idx===poles.length-1 ? 10 : 8);
-      c.setAttribute('fill', idx===0 ? 'var(--first)' : (idx===poles.length-1 ? 'var(--last)' : 'var(--pole)'));
-      c.style.cursor='grab'; c.dataset.index = idx.toString();
-      makeDraggable(c); polesLayer.appendChild(c);
-
-      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
-      t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
-      t.setAttribute('fill', 'var(--muted)'); t.setAttribute('font-size', '12');
-      t.textContent = \`P\${idx+1}\`; polesLayer.appendChild(t);
-    });
-
-    updateCompass(first, last);
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', p.x + 12); t.setAttribute('y', p.y - 12);
+    t.setAttribute('fill', 'var(--muted)'); t.setAttribute('font-size', '12');
+    t.textContent = `P${idx+1}`; polesLayer.appendChild(t);
   }
 
   function makeDraggable(el){
@@ -204,27 +247,45 @@
     return { x: p.x, y: p.y };
   }
 
-  document.getElementById('addBtn').addEventListener('click', () => {
+  // Controls: allow 0..4 poles
+  addBtn.addEventListener('click', () => {
     if (poles.length >= 4) return;
-    const last = poles[poles.length-1], prev = poles[poles.length-2];
-    const nx = prev ? prev.x + 0.6*(last.x - prev.x) : last.x + 60;
-    const ny = prev ? prev.y + 0.6*(last.y - prev.y) : last.y;
-    poles.splice(poles.length-1, 0, { x: nx, y: ny });
-    draw(); updateButtons();
+    if (poles.length === 0){
+      poles.push({ x: 600, y: 350 }); // center
+    } else if (poles.length === 1){
+      // drop a second pole offset to make vector obvious
+      const a = poles[0];
+      poles.push({ x: a.x + 200, y: a.y - 100 });
+    } else {
+      const last = poles[poles.length-1], prev = poles[poles.length-2];
+      const nx = prev.x + 0.6*(last.x - prev.x);
+      const ny = prev.y + 0.6*(last.y - prev.y);
+      poles.splice(poles.length-1, 0, { x: nx, y: ny });
+    }
+    draw();
   });
 
-  document.getElementById('removeBtn').addEventListener('click', () => {
-    if (poles.length <= 2) return;
-    poles.splice(poles.length-2, 1);
-    draw(); updateButtons();
+  removeBtn.addEventListener('click', () => {
+    if (poles.length === 0) return;
+    if (poles.length === 1){
+      poles = [];
+    } else if (poles.length === 2){
+      // remove last; keep one
+      poles.pop();
+    } else {
+      // remove last intermediate if exists; otherwise remove last
+      poles.splice(poles.length-2, 1);
+    }
+    draw();
   });
 
   function updateButtons(){
     document.getElementById('addBtn').disabled = poles.length >= 4;
-    document.getElementById('removeBtn').disabled = poles.length <= 2;
+    document.getElementById('removeBtn').disabled = poles.length === 0;
   }
 
-  updateButtons(); draw();
+  // initial draw
+  draw();
 })();
 </script>
 </body>
