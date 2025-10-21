@@ -20,20 +20,6 @@
     border:1px solid #1d2634; border-radius:.6rem; background:#0f162280;
     font-size:13px; color:var(--muted); letter-spacing:.02em;
   }
-  .toolbar {
-    position:absolute; top:1rem; right:1rem;
-    display:flex; gap:.5rem; background:#0f162280;
-    border:1px solid #1d2634; border-radius:.6rem; padding:.45rem .6rem;
-    align-items:center;
-  }
-  .toolbar button {
-    background:#141b27; color:var(--ink); border:1px solid #1d2634;
-    padding:.35rem .6rem; border-radius:.45rem; cursor:pointer;
-    transition:border-color .2s;
-  }
-  .toolbar button:hover { border-color:#27374f; }
-  .toolbar button:disabled { opacity:.5; cursor:not-allowed; }
-  .pill { padding:.25rem .6rem; border:1px solid #1d2634; border-radius:999px; color:var(--muted); font-size:12px; }
   .hint {
     position:absolute; left:1rem; bottom:1rem;
     background:#0f1622cc; border:1px solid #1d2634; border-radius:.6rem;
@@ -84,11 +70,6 @@
 <body>
 <div class="wrap">
   <div class="title">Rotation — Connected Structures</div>
-  <div class="toolbar">
-    <button id="rot-add">Add</button>
-    <button id="rot-rem">Remove</button>
-    <span class="pill" id="rot-count">0 structures</span>
-  </div>
   <div class="stage">
     <svg id="scene-rot" viewBox="0 0 1200 700" aria-label="rotation playground">
       <defs>
@@ -111,6 +92,7 @@
         <text x="1185" y="365" fill="#3f4a5d" font-size="12" text-anchor="end">X</text>
       </g>
       <g id="rot-connections"></g>
+      <g id="rot-global"></g>
       <g id="rot-bisectors"></g>
       <g id="rot-reference"></g>
       <g id="rot-poles"></g>
@@ -134,6 +116,11 @@
         <span>Auto reorient</span>
       </label>
       <p class="note">When enabled, the structure turns with the effective orientation.</p>
+      <label class="toggle">
+        <input type="checkbox" id="rot-align-toggle">
+        <span>Align all to S1↔S3</span>
+      </label>
+      <p class="note">Force every effective orientation to stay perpendicular to the line between S1 and S3.</p>
     </div>
   </div>
 </div>
@@ -150,6 +137,7 @@
 
   const scene = document.getElementById('scene-rot');
   const gConnections = document.getElementById('rot-connections');
+  const gGlobal = document.getElementById('rot-global');
   const gBisectors = document.getElementById('rot-bisectors');
   const gReference = document.getElementById('rot-reference');
   const gPoles = document.getElementById('rot-poles');
@@ -157,12 +145,10 @@
   const gAngles = document.getElementById('rot-angles');
   const gHandles = document.getElementById('rot-handles');
 
-  const addBtn = document.getElementById('rot-add');
-  const remBtn = document.getElementById('rot-rem');
-  const countPill = document.getElementById('rot-count');
   const propPanel = document.getElementById('rot-panel');
   const propTitle = document.getElementById('rot-panel-title');
   const propAuto = document.getElementById('rot-panel-auto');
+  const alignToggle = document.getElementById('rot-align-toggle');
   const propClose = document.getElementById('rot-panel-close');
 
   function clientToSvg(x, y){
@@ -195,12 +181,7 @@
   ];
   let dragState = null;
   let selectedIndex = null;
-
-  function updateButtons(){
-    countPill.textContent = `${structures.length} structure${structures.length===1 ? '' : 's'}`;
-    addBtn.disabled = structures.length >= MAX_STRUCTS;
-    remBtn.disabled = structures.length <= 1;
-  }
+  let globalAlign = false;
 
   function updatePanel(){
     if (selectedIndex === null || !structures[selectedIndex]){
@@ -210,6 +191,7 @@
     const label = `Structure S${selectedIndex + 1}`;
     propTitle.textContent = label;
     propAuto.checked = !!structures[selectedIndex].autoReorient;
+    alignToggle.checked = globalAlign;
     propPanel.hidden = false;
 
     const origin = structures[selectedIndex].origin;
@@ -244,6 +226,11 @@
   propAuto.addEventListener('change', () => {
     if (selectedIndex === null || !structures[selectedIndex]) return;
     structures[selectedIndex].autoReorient = propAuto.checked;
+    draw();
+  });
+
+  alignToggle.addEventListener('change', () => {
+    globalAlign = alignToggle.checked;
     draw();
   });
 
@@ -419,8 +406,8 @@
   }
 
   function draw(){
-    updateButtons();
     gConnections.innerHTML = '';
+    gGlobal.innerHTML = '';
     gBisectors.innerHTML = '';
     gReference.innerHTML = '';
     gPoles.innerHTML = '';
@@ -435,7 +422,25 @@
       poles: polePositions(structure)
     }));
 
-    const effectiveDirs = orientationData.map((_, idx) => computeEffectiveDirection(idx, orientationData));
+    let globalDir = null;
+    if (globalAlign && structures.length >= 2){
+      const first = structures[0];
+      const last = structures[structures.length - 1];
+      const axis = { x: last.origin.x - first.origin.x, y: last.origin.y - first.origin.y };
+      const axisLen = Math.hypot(axis.x, axis.y);
+      if (axisLen > 1e-3){
+        const axisNorm = { x: axis.x / axisLen, y: axis.y / axisLen };
+        globalDir = { x: -axisNorm.y, y: axisNorm.x };
+        const globalLine = makeLine(first.origin.x, first.origin.y, last.origin.x, last.origin.y, '#a855f7', 2.4);
+        globalLine.setAttribute('pointer-events', 'none');
+        gGlobal.appendChild(globalLine);
+      }
+    }
+
+    const effectiveDirs = orientationData.map((_, idx) => {
+      if (globalDir) return { x: globalDir.x, y: globalDir.y };
+      return computeEffectiveDirection(idx, orientationData);
+    });
     orientationData.forEach((data, idx) => {
       const eff = effectiveDirs[idx];
       if (!eff) return;
@@ -554,36 +559,6 @@
   scene.addEventListener('pointercancel', (e) => {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
     finishDrag(e.pointerId);
-    draw();
-  });
-
-  addBtn.addEventListener('click', () => {
-    if (structures.length >= MAX_STRUCTS) return;
-    const last = structures[structures.length - 1];
-    const prev = structures.length >= 2 ? structures[structures.length - 2] : null;
-    const dx = prev ? last.origin.x - prev.origin.x : 180;
-    const offsetX = Math.abs(dx) > 5 ? dx : 180;
-    const proposedOrigin = {
-      x: clamp(last.origin.x + offsetX, MARGIN, WIDTH - MARGIN),
-      y: clamp(last.origin.y, MARGIN, HEIGHT - MARGIN)
-    };
-    structures.push({
-      origin: proposedOrigin,
-      angle: last.angle,
-      autoReorient: true
-    });
-    draw();
-  });
-
-  remBtn.addEventListener('click', () => {
-    if (structures.length <= 1) return;
-    structures.pop();
-    if (selectedIndex !== null){
-      if (selectedIndex >= structures.length){
-        selectedIndex = null;
-      }
-      updatePanel();
-    }
     draw();
   });
 
