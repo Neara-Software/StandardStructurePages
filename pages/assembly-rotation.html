@@ -100,42 +100,44 @@
       <line x1="480" y1="0" x2="480" y2="640" stroke="#263140" stroke-width="1.2" opacity=".7"/>
     </g>
 
-    <g id="structure-axis">
-      <line x1="340" y1="320" x2="620" y2="320" stroke="var(--mark)" stroke-width="4" stroke-dasharray="10 6" stroke-linecap="round"/>
+    <g id="structure-root" transform="rotate(0 480 320)">
+      <g id="structure-axis">
+        <line x1="340" y1="320" x2="620" y2="320" stroke="var(--mark)" stroke-width="4" stroke-dasharray="10 6" stroke-linecap="round"/>
+      </g>
+
+      <g id="hf-assembly">
+        <!-- Left pole -->
+        <g class="pole" transform="translate(340,320)">
+          <circle r="46" fill="var(--pole)"/>
+          <g class="crossarm rotatable" data-id="left" data-label="Left crossarm" data-anchor="340 320" data-angle="90" transform="rotate(90)">
+            <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+          </g>
+        </g>
+
+        <!-- Right pole -->
+        <g class="pole" transform="translate(620,320)">
+          <circle r="46" fill="var(--pole)"/>
+          <g class="crossarm rotatable" data-id="right" data-label="Right crossarm" data-anchor="620 320" data-angle="0" transform="rotate(0)">
+            <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+          </g>
+        </g>
+
+        <!-- Stay assembly on right pole -->
+        <g class="stay rotatable" data-id="stay" data-label="Stay" data-anchor="620 320" data-angle="48" data-translate="620 320" transform="translate(620 320) rotate(48)">
+          <line x1="0" y1="0" x2="160" y2="180" stroke="var(--stay)" stroke-width="10" stroke-linecap="round"/>
+        </g>
+
+        <!-- Shared origin -->
+        <g>
+          <line x1="452" y1="292" x2="508" y2="348" stroke="var(--mark)" stroke-width="6" stroke-linecap="round"/>
+          <line x1="452" y1="348" x2="508" y2="292" stroke="var(--mark)" stroke-width="6" stroke-linecap="round"/>
+        </g>
+      </g>
     </g>
 
     <g id="effective-orientation" transform="rotate(0 480 320)">
       <line x1="0" y1="320" x2="960" y2="320" stroke="#f8fafc" stroke-width="2.4"/>
       <text x="940" y="304" fill="#f8fafc" font-size="13" text-anchor="end">Effective orientation</text>
-    </g>
-
-    <g id="hf-assembly">
-      <!-- Left pole -->
-      <g class="pole" transform="translate(340,320)">
-        <circle r="46" fill="var(--pole)"/>
-        <g class="crossarm rotatable" data-id="left" data-label="Left crossarm" data-anchor="340 320" data-angle="90" transform="rotate(90)">
-          <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
-        </g>
-      </g>
-
-      <!-- Right pole -->
-      <g class="pole" transform="translate(620,320)">
-        <circle r="46" fill="var(--pole)"/>
-        <g class="crossarm rotatable" data-id="right" data-label="Right crossarm" data-anchor="620 320" data-angle="0" transform="rotate(0)">
-          <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
-        </g>
-      </g>
-
-      <!-- Stay assembly on right pole -->
-      <g class="stay rotatable" data-id="stay" data-label="Stay" data-anchor="620 320" data-angle="48" data-translate="620 320" transform="translate(620 320) rotate(48)">
-        <line x1="0" y1="0" x2="160" y2="180" stroke="var(--stay)" stroke-width="10" stroke-linecap="round"/>
-      </g>
-
-      <!-- Shared origin -->
-      <g>
-        <line x1="452" y1="292" x2="508" y2="348" stroke="var(--mark)" stroke-width="6" stroke-linecap="round"/>
-        <line x1="452" y1="348" x2="508" y2="292" stroke="var(--mark)" stroke-width="6" stroke-linecap="round"/>
-      </g>
     </g>
   </svg>
   <div class="sidebar" id="sidebar">
@@ -145,8 +147,12 @@
         <span>Effective orientation (°)</span>
         <input type="number" id="effective-input" step="1" min="-180" max="180">
       </label>
+      <label class="field">
+        <span>Structure rotation (°)</span>
+        <input type="number" id="structure-input" step="1" min="-180" max="180">
+      </label>
       <div class="stat">
-        <span>Structure rotation</span>
+        <span>Offset vs effective</span>
         <strong id="structure-rotation">0°</strong>
       </div>
     </div>
@@ -180,8 +186,10 @@
   const rotationInput = document.getElementById('arm-rotation');
   const effectiveGroup = document.getElementById('effective-orientation');
   const effectiveInput = document.getElementById('effective-input');
+  const structureInput = document.getElementById('structure-input');
   const structureRotation = document.getElementById('structure-rotation');
   const rotationList = document.getElementById('rotation-list');
+  const structureRoot = document.getElementById('structure-root');
   const svg = document.getElementById('assembly-svg');
   const wrap = document.querySelector('.wrap');
 
@@ -229,13 +237,6 @@
     const y = Number(parts[1]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
     return { x, y };
-  };
-
-  const applyRotation = (item, angle) => {
-    const translate = item.dataset.translate;
-    const translatePart = translate ? `translate(${translate}) ` : '';
-    item.dataset.angle = String(angle);
-    item.setAttribute('transform', `${translatePart}rotate(${angle})`);
   };
 
   const getAnchorScreenPoint = (item) => {
@@ -289,32 +290,43 @@
     panel.style.top = `${top - wrapRect.top}px`;
   };
 
-  const getRelativeAngle = (id) => {
+  const applyRotation = (entry) => {
+    const element = entry.element;
+    const translate = element.dataset.translate;
+    const translatePart = translate ? `translate(${translate}) ` : '';
+    const relative = normalize(entry.angle - state.structure);
+    element.dataset.angle = String(entry.angle);
+    element.setAttribute('transform', `${translatePart}rotate(${relative})`);
+  };
+
+  const getDisplayAngle = (id) => {
     const entry = state.items.get(id);
     if (!entry) return 0;
     return normalize(entry.angle - state.effective);
   };
 
-  const updateControlDisplay = (id, overrideRelative) => {
-    const input = controls.get(id);
+  const updateControlDisplay = (id) => {
     const entry = state.items.get(id);
+    const input = controls.get(id);
     if (!entry || !input) return;
-    const relative = overrideRelative !== undefined ? overrideRelative : getRelativeAngle(id);
-    input.value = formatInputValue(relative);
+    input.value = formatInputValue(getDisplayAngle(id));
   };
 
-  const updateStructureRotation = () => {
+  const updateStructureRotationStat = () => {
     if (!structureRotation) return;
     const delta = normalize(state.structure - state.effective);
     structureRotation.textContent = formatDegrees(delta);
+    if (structureInput) {
+      structureInput.value = formatInputValue(state.structure);
+    }
   };
 
   const updateAllControls = () => {
     state.items.forEach((_, id) => updateControlDisplay(id));
-    updateStructureRotation();
+    updateStructureRotationStat();
     if (activeItem) {
-      const activeId = activeItem.dataset.id;
-      rotationInput.value = formatInputValue(getRelativeAngle(activeId));
+      const id = activeItem.dataset.id;
+      rotationInput.value = formatInputValue(getDisplayAngle(id));
       positionPanel(activeItem);
     }
   };
@@ -331,17 +343,39 @@
     updateAllControls();
   };
 
-  const setRelativeAngle = (id, value) => {
+  const setStructureRotation = (value, { updateInput = false } = {}) => {
+    const sanitized = sanitizeAngle(value);
+    const nextStructure = normalize(sanitized);
+    const delta = nextStructure - state.structure;
+    state.structure = nextStructure;
+    if (structureRoot) {
+      structureRoot.setAttribute('transform', `rotate(${state.structure} 480 320)`);
+    }
+    state.items.forEach((entry, id) => {
+      entry.angle = normalize(entry.angle + delta);
+      applyRotation(entry);
+      updateControlDisplay(id);
+    });
+    if (updateInput && structureInput) {
+      structureInput.value = formatInputValue(state.structure);
+    }
+    updateStructureRotationStat();
+    if (activeItem) {
+      rotationInput.value = formatInputValue(getDisplayAngle(activeItem.dataset.id));
+      positionPanel(activeItem);
+    }
+  };
+
+  const setItemDisplayAngle = (id, displayAngle) => {
     const entry = state.items.get(id);
     if (!entry) return;
-    const relative = sanitizeAngle(value);
-    const absolute = normalize(relative + state.effective);
+    const relativeToEffective = sanitizeAngle(displayAngle);
+    const absolute = normalize(relativeToEffective + state.effective);
     entry.angle = absolute;
-    entry.element.dataset.angle = String(absolute);
-    applyRotation(entry.element, absolute);
-    updateControlDisplay(id, relative);
+    applyRotation(entry);
+    updateControlDisplay(id);
     if (activeItem && activeItem.dataset.id === id) {
-      rotationInput.value = formatInputValue(relative);
+      rotationInput.value = formatInputValue(relativeToEffective);
       positionPanel(entry.element);
     }
   };
@@ -352,9 +386,8 @@
     const initialAngle = normalize(Number(element.dataset.angle || 0));
 
     element.dataset.id = id;
-    element.dataset.angle = String(initialAngle);
     state.items.set(id, { element, label, angle: initialAngle });
-    applyRotation(element, initialAngle);
+    applyRotation(state.items.get(id));
 
     if (rotationList) {
       const field = document.createElement('label');
@@ -369,13 +402,11 @@
       field.appendChild(title);
       field.appendChild(input);
       rotationList.appendChild(field);
-
       controls.set(id, input);
-
       input.addEventListener('input', () => {
-        const relative = sanitizeAngle(input.value);
-        input.value = formatInputValue(relative);
-        setRelativeAngle(id, relative);
+        const display = sanitizeAngle(input.value);
+        input.value = formatInputValue(display);
+        setItemDisplayAngle(id, display);
       });
     }
 
@@ -390,7 +421,7 @@
     const id = item.dataset.id || 'item';
     const entry = state.items.get(id);
     panelTitle.textContent = entry?.label || item.dataset.label || id;
-    rotationInput.value = formatInputValue(getRelativeAngle(id));
+    rotationInput.value = formatInputValue(getDisplayAngle(id));
     panel.hidden = false;
     panel.style.visibility = 'hidden';
     positionPanel(item);
@@ -408,14 +439,20 @@
   rotationInput.addEventListener('input', () => {
     if (!activeItem) return;
     const id = activeItem.dataset.id;
-    const relative = sanitizeAngle(rotationInput.value);
-    rotationInput.value = formatInputValue(relative);
-    setRelativeAngle(id, relative);
+    const display = sanitizeAngle(rotationInput.value);
+    rotationInput.value = formatInputValue(display);
+    setItemDisplayAngle(id, display);
   });
 
   if (effectiveInput) {
     effectiveInput.addEventListener('input', () => {
       setEffectiveOrientation(effectiveInput.value, { updateInput: true });
+    });
+  }
+
+  if (structureInput) {
+    structureInput.addEventListener('input', () => {
+      setStructureRotation(structureInput.value, { updateInput: true });
     });
   }
 
@@ -441,6 +478,7 @@
   const rotatables = Array.from(document.querySelectorAll('.rotatable'));
   rotatables.forEach(registerItem);
 
+  setStructureRotation(0, { updateInput: true });
   setEffectiveOrientation(0, { updateInput: true });
   updateAllControls();
 })();
