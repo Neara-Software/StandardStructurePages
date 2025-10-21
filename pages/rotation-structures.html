@@ -49,6 +49,36 @@
   }
   .legend .swatch-ref { background:var(--accent); }
   .legend .swatch-eff { background:var(--warn); }
+  .prop-panel {
+    position:absolute; background:#0f1622f0; border:1px solid #1d2634; border-radius:.65rem;
+    padding:.65rem .8rem; width:220px; color:var(--muted); font-size:13px;
+    display:flex; flex-direction:column; gap:.55rem; pointer-events:auto;
+    box-shadow:0 10px 25px #0006;
+  }
+  .prop-panel[hidden] { display:none; }
+  .prop-panel h2 {
+    margin:0; font-size:13px; font-weight:600; color:var(--ink); display:flex; justify-content:space-between; align-items:center;
+  }
+  .prop-close {
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; padding:0;
+  }
+  .prop-close:hover { color:var(--ink); }
+  .toggle {
+    display:flex; align-items:center; gap:.55rem;
+    cursor:pointer; user-select:none;
+  }
+  .toggle input {
+    appearance:none; width:36px; height:20px; border-radius:999px;
+    border:1px solid #1d2634; background:#131b28; position:relative;
+    transition:background .2s ease;
+  }
+  .toggle input::after {
+    content:''; position:absolute; top:2px; left:2px; width:16px; height:16px;
+    border-radius:50%; background:#4b5a70; transition:transform .2s ease, background .2s ease;
+  }
+  .toggle input:checked { background:#2563eb55; border-color:#2563ebaa; }
+  .toggle input:checked::after { transform:translateX(16px); background:#2dd4bf; }
+  .origin-selected line { stroke-width:3.1px; }
 </style>
 </head>
 <body>
@@ -97,6 +127,14 @@
       <div><span class="swatch swatch-ref"></span>Reference orientation</div>
       <div><span class="swatch swatch-eff"></span>Effective orientation</div>
     </div>
+    <div class="prop-panel" id="rot-panel" hidden>
+      <h2 id="rot-panel-title">Structure <button class="prop-close" id="rot-panel-close">×</button></h2>
+      <label class="toggle">
+        <input type="checkbox" id="rot-panel-auto" checked>
+        <span>Auto reorient</span>
+      </label>
+      <p class="note">When enabled, the structure turns with the effective orientation.</p>
+    </div>
   </div>
 </div>
 
@@ -108,6 +146,7 @@
   const MARGIN = 40;
   const MAX_STRUCTS = 3;
   const POLE_HALF = 80;
+  const EFFECT_EXTRA = 36;
 
   const scene = document.getElementById('scene-rot');
   const gConnections = document.getElementById('rot-connections');
@@ -121,6 +160,10 @@
   const addBtn = document.getElementById('rot-add');
   const remBtn = document.getElementById('rot-rem');
   const countPill = document.getElementById('rot-count');
+  const propPanel = document.getElementById('rot-panel');
+  const propTitle = document.getElementById('rot-panel-title');
+  const propAuto = document.getElementById('rot-panel-auto');
+  const propClose = document.getElementById('rot-panel-close');
 
   function clientToSvg(x, y){
     const pt = scene.createSVGPoint();
@@ -136,20 +179,80 @@
     };
   }
 
+  function svgToScreen(x, y){
+    const pt = scene.createSVGPoint();
+    pt.x = x; pt.y = y;
+    const screen = pt.matrixTransform(scene.getScreenCTM());
+    return { x: screen.x, y: screen.y };
+  }
+
   const RAD2DEG = 180 / Math.PI;
 
   let structures = [
-    { origin:{ x: 460, y: 360 }, angle: -0.44 },
-    { origin:{ x: 660, y: 360 }, angle: -0.25 },
-    { origin:{ x: 860, y: 360 }, angle:  0.32 }
+    { origin:{ x: 460, y: 360 }, angle: -0.44, autoReorient:true },
+    { origin:{ x: 660, y: 360 }, angle: -0.25, autoReorient:true },
+    { origin:{ x: 860, y: 360 }, angle:  0.32, autoReorient:true }
   ];
   let dragState = null;
+  let selectedIndex = null;
 
   function updateButtons(){
     countPill.textContent = `${structures.length} structure${structures.length===1 ? '' : 's'}`;
     addBtn.disabled = structures.length >= MAX_STRUCTS;
     remBtn.disabled = structures.length <= 1;
   }
+
+  function updatePanel(){
+    if (selectedIndex === null || !structures[selectedIndex]){
+      propPanel.hidden = true;
+      return;
+    }
+    const label = `Structure S${selectedIndex + 1}`;
+    propTitle.textContent = label;
+    propAuto.checked = !!structures[selectedIndex].autoReorient;
+    propPanel.hidden = false;
+
+    const origin = structures[selectedIndex].origin;
+    const stageRect = scene.getBoundingClientRect();
+    const screenPos = svgToScreen(origin.x, origin.y);
+
+    propPanel.style.visibility = 'hidden';
+    const panelRect = propPanel.getBoundingClientRect();
+    propPanel.style.visibility = '';
+
+    let left = screenPos.x - stageRect.left - panelRect.width / 2;
+    let top = screenPos.y - stageRect.top - panelRect.height - 18;
+
+    const minLeft = 8;
+    const maxLeft = stageRect.width - panelRect.width - 8;
+    left = clamp(left, minLeft, maxLeft);
+
+    const minTop = 8;
+    top = Math.max(minTop, top);
+
+    propPanel.style.left = `${left}px`;
+    propPanel.style.top = `${top}px`;
+  }
+
+  function selectStructure(idx){
+    if (idx === selectedIndex) return;
+    selectedIndex = idx;
+    updatePanel();
+    draw();
+  }
+
+  propAuto.addEventListener('change', () => {
+    if (selectedIndex === null || !structures[selectedIndex]) return;
+    structures[selectedIndex].autoReorient = propAuto.checked;
+    draw();
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    if (propPanel.hidden) return;
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.includes(propPanel)) return;
+    selectStructure(null);
+  });
 
   function makeCircle(cx, cy, r, fill, stroke = 'none', strokeWidth = 1.5){
     const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -200,7 +303,8 @@
   }
 
   function startDrag(type, structure, pointerId, extra = {}){
-    dragState = { type, structure, pointerId, ...extra };
+    const { index = structures.indexOf(structure), offset } = extra;
+    dragState = { type, structure, pointerId, index, offset, moved:false };
     try {
       scene.setPointerCapture(pointerId);
     } catch (err) {
@@ -218,7 +322,7 @@
     dragState = null;
   }
 
-  function drawBisector(idx, orientationData){
+  function computeBisectorVector(idx, orientationData){
     if (idx <= 0 || idx >= orientationData.length - 1) return null;
     const prev = orientationData[idx - 1].structure;
     const midStruct = orientationData[idx].structure;
@@ -242,13 +346,36 @@
     }
     bis.x /= bisLen;
     bis.y /= bisLen;
+    return bis;
+  }
 
-    const span = 1600;
+  function computeEffectiveDirection(idx, orientationData){
+    if (orientationData.length === 0) return null;
+    if (idx > 0 && idx < orientationData.length - 1){
+      return computeBisectorVector(idx, orientationData);
+    }
+    if (orientationData.length < 2) return null;
+    const neighborIdx = idx === 0 ? 1 : orientationData.length - 2;
+    if (neighborIdx === idx || !orientationData[neighborIdx]) return null;
+    const self = orientationData[idx].structure;
+    const neighbor = orientationData[neighborIdx].structure;
+    const vx = neighbor.origin.x - self.origin.x;
+    const vy = neighbor.origin.y - self.origin.y;
+    const len = Math.hypot(vx, vy);
+    if (len < 1e-3) return null;
+    return { x: -vy / len, y: vx / len };
+  }
+
+  function drawEffectiveLine(idx, orientationData, dirVec){
+    const eff = dirVec || computeEffectiveDirection(idx, orientationData);
+    if (!eff) return null;
+    const midStruct = orientationData[idx].structure;
+    const span = POLE_HALF + EFFECT_EXTRA;
     const line = makeLine(
-      midStruct.origin.x - bis.x * span,
-      midStruct.origin.y - bis.y * span,
-      midStruct.origin.x + bis.x * span,
-      midStruct.origin.y + bis.y * span,
+      midStruct.origin.x - eff.x * span,
+      midStruct.origin.y - eff.y * span,
+      midStruct.origin.x + eff.x * span,
+      midStruct.origin.y + eff.y * span,
       'var(--warn)', 2.7
     );
     line.classList.add('effective');
@@ -256,37 +383,38 @@
     gBisectors.appendChild(line);
 
     const dir = orientationData[idx].dir;
-    const angleDeg = angleBetween(bis, dir);
+    const angleDeg = angleBetween(eff, dir);
     return { origin: midStruct.origin, angleDeg };
   }
 
-  function attachOriginDrag(handle, structure){
+  function attachOriginDrag(handle, structure, index){
     handle.addEventListener('pointerdown', (e) => {
       const p = clientToSvg(e.clientX, e.clientY);
       const offset = {
         dx: structure.origin.x - p.x,
         dy: structure.origin.y - p.y
       };
-      startDrag('origin', structure, e.pointerId, { offset });
+      startDrag('origin', structure, e.pointerId, { offset, index });
       draw();
       e.preventDefault();
     });
   }
 
-  function attachRotationDrag(handle, structure){
+  function attachRotationDrag(handle, structure, index){
     handle.addEventListener('pointerdown', (e) => {
-      startDrag('rotation', structure, e.pointerId);
+      startDrag('rotation', structure, e.pointerId, { index });
       draw();
       e.preventDefault();
     });
   }
 
-  function drawOriginGlyph(structure){
+  function drawOriginGlyph(structure, index){
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     const crossLines = makeCrossLines(structure.origin.x, structure.origin.y, 14, 'var(--warn)', 2.4);
     crossLines.forEach(line => group.appendChild(line));
     group.style.cursor = dragState && dragState.structure === structure && dragState.type === 'origin' ? 'grabbing' : 'grab';
-    attachOriginDrag(group, structure);
+    if (index === selectedIndex) group.classList.add('origin-selected');
+    attachOriginDrag(group, structure, index);
     return group;
   }
 
@@ -300,11 +428,30 @@
     gAngles.innerHTML = '';
     gHandles.innerHTML = '';
 
-    const orientationData = structures.map(structure => ({
+    const orientationData = structures.map((structure, index) => ({
+      index,
       structure,
       dir: { x: Math.cos(structure.angle), y: Math.sin(structure.angle) },
       poles: polePositions(structure)
     }));
+
+    const effectiveDirs = orientationData.map((_, idx) => computeEffectiveDirection(idx, orientationData));
+    orientationData.forEach((data, idx) => {
+      const eff = effectiveDirs[idx];
+      if (!eff) return;
+      if (!data.structure.autoReorient) return;
+      if (dragState && dragState.structure === data.structure && dragState.type === 'rotation') return;
+      const targetAngle = Math.atan2(eff.y, eff.x);
+      if (Math.abs(targetAngle - data.structure.angle) > 1e-3){
+        data.structure.angle = targetAngle;
+      }
+    });
+
+    orientationData.forEach((data) => {
+      const angle = data.structure.angle;
+      data.dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      data.poles = polePositions(data.structure);
+    });
 
     orientationData.forEach((data, idx) => {
       if (idx < orientationData.length - 1){
@@ -315,7 +462,7 @@
       }
     });
 
-    orientationData.forEach((data, idx) => {
+    orientationData.forEach((data) => {
       const [poleA, poleB] = data.poles;
       const refLine = makeLine(poleA.x, poleA.y, poleB.x, poleB.y, 'var(--accent)', 3);
       refLine.setAttribute('pointer-events', 'none');
@@ -326,8 +473,8 @@
       const poleBEl = makeCircle(poleB.x, poleB.y, poleRadius, '#142030', 'var(--accent)', 2);
       poleAEl.style.cursor = dragState && dragState.structure === data.structure && dragState.type === 'rotation' ? 'grabbing' : 'grab';
       poleBEl.style.cursor = dragState && dragState.structure === data.structure && dragState.type === 'rotation' ? 'grabbing' : 'grab';
-      attachRotationDrag(poleAEl, data.structure);
-      attachRotationDrag(poleBEl, data.structure);
+      attachRotationDrag(poleAEl, data.structure, data.index);
+      attachRotationDrag(poleBEl, data.structure, data.index);
       gPoles.appendChild(poleAEl);
       gPoles.appendChild(poleBEl);
 
@@ -337,15 +484,15 @@
       label.setAttribute('fill', '#9fb0c2');
       label.setAttribute('font-size', '12');
       label.setAttribute('pointer-events', 'none');
-      label.textContent = `S${idx + 1}`;
+      label.textContent = `S${data.index + 1}`;
       gLabels.appendChild(label);
 
-      const originGlyph = drawOriginGlyph(data.structure);
+      const originGlyph = drawOriginGlyph(data.structure, data.index);
       gHandles.appendChild(originGlyph);
     });
 
     orientationData.forEach((data, idx) => {
-      const info = drawBisector(idx, orientationData);
+      const info = drawEffectiveLine(idx, orientationData, effectiveDirs[idx]);
       if (info){
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', info.origin.x + 14);
@@ -357,6 +504,8 @@
         gAngles.appendChild(text);
       }
     });
+
+    updatePanel();
   }
 
   scene.addEventListener('pointermove', (e) => {
@@ -369,14 +518,23 @@
         y: p.y + offset.dy
       };
       const clamped = clampPoint(next);
-      dragState.structure.origin.x = clamped.x;
-      dragState.structure.origin.y = clamped.y;
+      if (Math.abs(clamped.x - dragState.structure.origin.x) > 0.5 || Math.abs(clamped.y - dragState.structure.origin.y) > 0.5){
+        dragState.moved = true;
+        dragState.structure.origin.x = clamped.x;
+        dragState.structure.origin.y = clamped.y;
+      }
     } else if (dragState.type === 'rotation'){
       const vector = {
         x: p.x - dragState.structure.origin.x,
         y: p.y - dragState.structure.origin.y
       };
       if (Math.hypot(vector.x, vector.y) > 1e-3){
+        if (!dragState.autoDisabled && dragState.structure.autoReorient){
+          dragState.structure.autoReorient = false;
+          dragState.autoDisabled = true;
+          if (dragState.index === selectedIndex) updatePanel();
+        }
+        dragState.moved = true;
         dragState.structure.angle = Math.atan2(vector.y, vector.x);
       }
     }
@@ -385,8 +543,13 @@
 
   scene.addEventListener('pointerup', (e) => {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const state = { ...dragState };
     finishDrag(e.pointerId);
-    draw();
+    if (state.type === 'origin' && !state.moved){
+      selectStructure(state.index);
+    } else {
+      draw();
+    }
   });
   scene.addEventListener('pointercancel', (e) => {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
@@ -406,7 +569,8 @@
     };
     structures.push({
       origin: proposedOrigin,
-      angle: last.angle
+      angle: last.angle,
+      autoReorient: true
     });
     draw();
   });
@@ -414,6 +578,12 @@
   remBtn.addEventListener('click', () => {
     if (structures.length <= 1) return;
     structures.pop();
+    if (selectedIndex !== null){
+      if (selectedIndex >= structures.length){
+        selectedIndex = null;
+      }
+      updatePanel();
+    }
     draw();
   });
 
@@ -422,3 +592,9 @@
 </script>
 </body>
 </html>
+  function svgToScreen(x, y){
+    const pt = scene.createSVGPoint();
+    pt.x = x; pt.y = y;
+    const { x: sx, y: sy } = pt.matrixTransform(scene.getScreenCTM());
+    return { x: sx, y: sy };
+  }
