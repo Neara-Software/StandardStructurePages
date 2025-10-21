@@ -11,6 +11,7 @@
     --crossarm:#2563eb;
     --stay:#facc15;
     --mark:#f43f5e;
+    --font:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
   }
   body { margin:0; }
   .wrap { position:relative; height:100vh; width:100vw; overflow:hidden; }
@@ -22,19 +23,68 @@
     font-size:13px; letter-spacing:.02em; color:var(--muted);
   }
   .legend {
-    position:absolute; top:1rem; right:1rem;
+    position:absolute; left:1rem; bottom:1rem;
     background:#0f162280; border:1px solid #1d2634;
     border-radius:.6rem; padding:.6rem .7rem;
     color:var(--muted); font-size:12px; display:flex; flex-direction:column; gap:.35rem;
   }
   .legend span { display:inline-flex; align-items:center; gap:.4rem; }
   .swatch { width:16px; height:8px; border-radius:999px; display:inline-block; }
+  .rotatable { cursor:pointer; }
+  text { font-family:var(--font); }
+  .panel {
+    position:absolute; left:0; top:0;
+    width:220px; background:#0f1622f0; border:1px solid #1d2634;
+    border-radius:.65rem; padding:.75rem; color:var(--muted);
+    font-size:13px; display:flex; flex-direction:column; gap:.65rem;
+    box-shadow:0 12px 30px #0007; z-index:10; pointer-events:auto;
+  }
+  .panel[hidden] { display:none; }
+  .panel-header { display:flex; justify-content:space-between; align-items:center; color:var(--ink); font-size:13px; font-weight:600; }
+  .panel-close { background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; line-height:1; padding:0 .2rem; }
+  .panel-close:hover { color:var(--ink); }
+  .panel label { display:flex; flex-direction:column; gap:.35rem; color:var(--muted); font-size:12px; }
+  .panel input[type="number"] {
+    background:#111a27; border:1px solid #1d2634; border-radius:.45rem;
+    padding:.4rem .5rem; color:var(--ink); font-size:13px;
+  }
+  .panel input[type="number"]:focus { outline:none; border-color:#2563ebaa; box-shadow:0 0 0 1px #2563eb55; }
+  .sidebar {
+    position:absolute; top:1rem; right:1rem;
+    width:240px; background:#0f1622f0; border:1px solid #1d2634;
+    border-radius:.75rem; padding:1rem; color:var(--muted);
+    font-size:13px; display:flex; flex-direction:column; gap:1rem;
+    box-shadow:0 12px 30px #0008;
+  }
+  .sidebar h2 {
+    margin:0 0 .4rem; font-size:13px; font-weight:600; color:var(--ink);
+  }
+  .sidebar .field {
+    display:flex; flex-direction:column; gap:.35rem;
+  }
+  .sidebar .field span { font-size:12px; color:var(--muted); }
+  .sidebar input[type="number"] {
+    background:#111a27; border:1px solid #1d2634; border-radius:.45rem;
+    padding:.4rem .5rem; color:var(--ink); font-size:13px;
+  }
+  .sidebar input[type="number"]:focus {
+    outline:none; border-color:#2563ebaa; box-shadow:0 0 0 1px #2563eb55;
+  }
+  .sidebar .stat {
+    font-size:12px; display:flex; justify-content:space-between;
+    align-items:center; padding:.45rem .55rem; border:1px solid #1d2634;
+    border-radius:.5rem; background:#111a27;
+  }
+  .sidebar .stat strong { color:var(--ink); font-weight:600; }
+  .sidebar .list {
+    display:flex; flex-direction:column; gap:.65rem;
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="title">Assembly Rotation — H-Frame Plan View</div>
-  <svg viewBox="0 0 960 640" aria-label="Top-down H-frame assembly">
+  <svg id="assembly-svg" viewBox="0 0 960 640" aria-label="Top-down H-frame assembly">
     <defs>
       <pattern id="subgrid-asm" width="20" height="20" patternUnits="userSpaceOnUse">
         <path d="M20 0H0V20" fill="none" stroke="var(--subgrid)" stroke-width=".8"/>
@@ -46,27 +96,39 @@
     </defs>
     <rect x="0" y="0" width="960" height="640" fill="url(#grid-asm)"/>
 
-    <g stroke="#263140" stroke-width="1.2" opacity=".7">
-      <line x1="480" y1="0" x2="480" y2="640"/>
-      <line x1="0" y1="320" x2="960" y2="320"/>
+    <g>
+      <line x1="480" y1="0" x2="480" y2="640" stroke="#263140" stroke-width="1.2" opacity=".7"/>
+    </g>
+
+    <g id="structure-axis">
+      <line x1="340" y1="320" x2="620" y2="320" stroke="var(--mark)" stroke-width="4" stroke-dasharray="10 6" stroke-linecap="round"/>
+    </g>
+
+    <g id="effective-orientation" transform="rotate(0 480 320)">
+      <line x1="0" y1="320" x2="960" y2="320" stroke="#f8fafc" stroke-width="2.4"/>
+      <text x="940" y="304" fill="#f8fafc" font-size="13" text-anchor="end">Effective orientation</text>
     </g>
 
     <g id="hf-assembly">
       <!-- Left pole -->
       <g class="pole" transform="translate(340,320)">
         <circle r="46" fill="var(--pole)"/>
-        <line x1="0" y1="-115" x2="0" y2="115" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+        <g class="crossarm rotatable" data-id="left" data-label="Left crossarm" data-anchor="340 320" data-angle="90" transform="rotate(90)">
+          <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+        </g>
       </g>
 
       <!-- Right pole -->
       <g class="pole" transform="translate(620,320)">
         <circle r="46" fill="var(--pole)"/>
-        <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+        <g class="crossarm rotatable" data-id="right" data-label="Right crossarm" data-anchor="620 320" data-angle="0" transform="rotate(0)">
+          <line x1="-115" y1="0" x2="115" y2="0" stroke="var(--crossarm)" stroke-width="16" stroke-linecap="round"/>
+        </g>
       </g>
 
       <!-- Stay assembly on right pole -->
-      <g class="stay">
-        <line x1="620" y1="320" x2="780" y2="500" stroke="var(--stay)" stroke-width="10" stroke-linecap="round"/>
+      <g class="stay rotatable" data-id="stay" data-label="Stay" data-anchor="620 320" data-angle="48" data-translate="620 320" transform="translate(620 320) rotate(48)">
+        <line x1="0" y1="0" x2="160" y2="180" stroke="var(--stay)" stroke-width="10" stroke-linecap="round"/>
       </g>
 
       <!-- Shared origin -->
@@ -75,20 +137,313 @@
         <line x1="452" y1="348" x2="508" y2="292" stroke="var(--mark)" stroke-width="6" stroke-linecap="round"/>
       </g>
     </g>
-
-    <!-- Compass -->
-    <g transform="translate(120,520)">
-      <circle r="44" fill="#0b0f14" stroke="#1d2634" stroke-width="2"/>
-      <path d="M0,-30 L8,10 L0,4 L-8,10 Z" fill="var(--accent)"/>
-      <path d="M0,30 L-8,-10 L0,-4 L8,-10 Z" fill="#27364a"/>
-    </g>
   </svg>
+  <div class="sidebar" id="sidebar">
+    <div>
+      <h2>Orientation</h2>
+      <label class="field">
+        <span>Effective orientation (°)</span>
+        <input type="number" id="effective-input" step="1" min="-180" max="180">
+      </label>
+      <div class="stat">
+        <span>Structure rotation</span>
+        <strong id="structure-rotation">0°</strong>
+      </div>
+    </div>
+    <div>
+      <h2>Members</h2>
+      <div class="list" id="rotation-list"></div>
+    </div>
+  </div>
   <div class="legend">
     <span><span class="swatch" style="background:var(--pole);"></span>Pole footprint</span>
     <span><span class="swatch" style="background:var(--crossarm);"></span>Crossarm</span>
     <span><span class="swatch" style="background:var(--stay);"></span>Stay</span>
     <span><span class="swatch" style="background:var(--mark);"></span>Rotation center</span>
   </div>
+  <div class="panel" id="arm-panel" hidden>
+    <div class="panel-header">
+      <span id="arm-panel-title">Crossarm</span>
+      <button class="panel-close" id="arm-panel-close" aria-label="Close rotation panel">×</button>
+    </div>
+    <label>
+      <span>Rotation (deg)</span>
+      <input type="number" id="arm-rotation" step="1" min="-180" max="180">
+    </label>
+  </div>
 </div>
+<script>
+(() => {
+  const panel = document.getElementById('arm-panel');
+  const panelTitle = document.getElementById('arm-panel-title');
+  const panelClose = document.getElementById('arm-panel-close');
+  const rotationInput = document.getElementById('arm-rotation');
+  const effectiveGroup = document.getElementById('effective-orientation');
+  const effectiveInput = document.getElementById('effective-input');
+  const structureRotation = document.getElementById('structure-rotation');
+  const rotationList = document.getElementById('rotation-list');
+  const svg = document.getElementById('assembly-svg');
+  const wrap = document.querySelector('.wrap');
+
+  const state = {
+    effective: 0,
+    structure: 0,
+    items: new Map()
+  };
+  const controls = new Map();
+  let activeItem = null;
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  const normalize = (angle) => {
+    let a = ((angle % 360) + 360) % 360;
+    if (a > 180) a -= 360;
+    if (a === -180) a = 180;
+    return a;
+  };
+
+  const sanitizeAngle = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 0;
+    return clamp(num, -180, 180);
+  };
+
+  const formatInputValue = (angle) => {
+    const rounded = Math.round(angle * 10) / 10;
+    const value = Math.abs(rounded) < 0.0001 ? 0 : rounded;
+    return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+  };
+
+  const formatDegrees = (angle) => {
+    const rounded = Math.round(angle * 10) / 10;
+    const value = Math.abs(rounded) < 0.0001 ? 0 : rounded;
+    const text = Number.isInteger(value) ? value.toString() : value.toFixed(1);
+    return `${text}°`;
+  };
+
+  const parsePair = (value) => {
+    if (!value) return null;
+    const parts = value.trim().split(/\s+/);
+    if (parts.length !== 2) return null;
+    const x = Number(parts[0]);
+    const y = Number(parts[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  };
+
+  const applyRotation = (item, angle) => {
+    const translate = item.dataset.translate;
+    const translatePart = translate ? `translate(${translate}) ` : '';
+    item.dataset.angle = String(angle);
+    item.setAttribute('transform', `${translatePart}rotate(${angle})`);
+  };
+
+  const getAnchorScreenPoint = (item) => {
+    if (!svg) return null;
+    const anchorPair = parsePair(item.dataset.anchor || item.dataset.translate);
+    if (!anchorPair) return null;
+    const point = svg.createSVGPoint();
+    point.x = anchorPair.x;
+    point.y = anchorPair.y;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return null;
+    const transformed = point.matrixTransform(matrix);
+    return { x: transformed.x, y: transformed.y };
+  };
+
+  const positionPanel = (target) => {
+    if (!wrap) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const padding = 12;
+    const anchorPoint = getAnchorScreenPoint(target);
+    let targetRect = null;
+    let fallbackBelow = null;
+    let left;
+    let top;
+
+    if (anchorPoint) {
+      left = anchorPoint.x - panelRect.width / 2;
+      top = anchorPoint.y - panelRect.height - padding;
+      fallbackBelow = anchorPoint.y + padding;
+    } else {
+      targetRect = target.getBoundingClientRect();
+      left = targetRect.left + targetRect.width / 2 - panelRect.width / 2;
+      top = targetRect.top - panelRect.height - padding;
+      fallbackBelow = targetRect.bottom + padding;
+    }
+
+    const minLeft = wrapRect.left + padding;
+    const maxLeft = wrapRect.right - panelRect.width - padding;
+    left = clamp(left, minLeft, maxLeft);
+
+    if (top < wrapRect.top + padding) {
+      const candidate = fallbackBelow || wrapRect.top + padding;
+      top = clamp(candidate, wrapRect.top + padding, wrapRect.bottom - panelRect.height - padding);
+    }
+
+    const maxTop = wrapRect.bottom - panelRect.height - padding;
+    top = clamp(top, wrapRect.top + padding, maxTop);
+
+    panel.style.left = `${left - wrapRect.left}px`;
+    panel.style.top = `${top - wrapRect.top}px`;
+  };
+
+  const getRelativeAngle = (id) => {
+    const entry = state.items.get(id);
+    if (!entry) return 0;
+    return normalize(entry.angle - state.effective);
+  };
+
+  const updateControlDisplay = (id, overrideRelative) => {
+    const input = controls.get(id);
+    const entry = state.items.get(id);
+    if (!entry || !input) return;
+    const relative = overrideRelative !== undefined ? overrideRelative : getRelativeAngle(id);
+    input.value = formatInputValue(relative);
+  };
+
+  const updateStructureRotation = () => {
+    if (!structureRotation) return;
+    const delta = normalize(state.structure - state.effective);
+    structureRotation.textContent = formatDegrees(delta);
+  };
+
+  const updateAllControls = () => {
+    state.items.forEach((_, id) => updateControlDisplay(id));
+    updateStructureRotation();
+    if (activeItem) {
+      const activeId = activeItem.dataset.id;
+      rotationInput.value = formatInputValue(getRelativeAngle(activeId));
+      positionPanel(activeItem);
+    }
+  };
+
+  const setEffectiveOrientation = (value, { updateInput = false } = {}) => {
+    const sanitized = sanitizeAngle(value);
+    state.effective = normalize(sanitized);
+    if (effectiveGroup) {
+      effectiveGroup.setAttribute('transform', `rotate(${state.effective} 480 320)`);
+    }
+    if (updateInput && effectiveInput) {
+      effectiveInput.value = formatInputValue(state.effective);
+    }
+    updateAllControls();
+  };
+
+  const setRelativeAngle = (id, value) => {
+    const entry = state.items.get(id);
+    if (!entry) return;
+    const relative = sanitizeAngle(value);
+    const absolute = normalize(relative + state.effective);
+    entry.angle = absolute;
+    entry.element.dataset.angle = String(absolute);
+    applyRotation(entry.element, absolute);
+    updateControlDisplay(id, relative);
+    if (activeItem && activeItem.dataset.id === id) {
+      rotationInput.value = formatInputValue(relative);
+      positionPanel(entry.element);
+    }
+  };
+
+  const registerItem = (element) => {
+    const id = element.dataset.id || `item-${state.items.size}`;
+    const label = element.dataset.label || id;
+    const initialAngle = normalize(Number(element.dataset.angle || 0));
+
+    element.dataset.id = id;
+    element.dataset.angle = String(initialAngle);
+    state.items.set(id, { element, label, angle: initialAngle });
+    applyRotation(element, initialAngle);
+
+    if (rotationList) {
+      const field = document.createElement('label');
+      field.className = 'field';
+      const title = document.createElement('span');
+      title.textContent = `${label} (°)`;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = '1';
+      input.min = '-180';
+      input.max = '180';
+      field.appendChild(title);
+      field.appendChild(input);
+      rotationList.appendChild(field);
+
+      controls.set(id, input);
+
+      input.addEventListener('input', () => {
+        const relative = sanitizeAngle(input.value);
+        input.value = formatInputValue(relative);
+        setRelativeAngle(id, relative);
+      });
+    }
+
+    element.addEventListener('click', (event) => {
+      event.stopPropagation();
+      showPanel(element);
+    });
+  };
+
+  const showPanel = (item) => {
+    activeItem = item;
+    const id = item.dataset.id || 'item';
+    const entry = state.items.get(id);
+    panelTitle.textContent = entry?.label || item.dataset.label || id;
+    rotationInput.value = formatInputValue(getRelativeAngle(id));
+    panel.hidden = false;
+    panel.style.visibility = 'hidden';
+    positionPanel(item);
+    panel.style.visibility = '';
+    rotationInput.focus();
+    rotationInput.select();
+  };
+
+  const hidePanel = () => {
+    panel.hidden = true;
+    panel.style.visibility = '';
+    activeItem = null;
+  };
+
+  rotationInput.addEventListener('input', () => {
+    if (!activeItem) return;
+    const id = activeItem.dataset.id;
+    const relative = sanitizeAngle(rotationInput.value);
+    rotationInput.value = formatInputValue(relative);
+    setRelativeAngle(id, relative);
+  });
+
+  if (effectiveInput) {
+    effectiveInput.addEventListener('input', () => {
+      setEffectiveOrientation(effectiveInput.value, { updateInput: true });
+    });
+  }
+
+  panelClose.addEventListener('click', hidePanel);
+
+  document.addEventListener('click', (event) => {
+    if (!panel.hidden && !panel.contains(event.target)) {
+      hidePanel();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) hidePanel();
+  });
+
+  window.addEventListener('resize', () => {
+    if (panel.hidden || !activeItem) return;
+    panel.style.visibility = 'hidden';
+    positionPanel(activeItem);
+    panel.style.visibility = '';
+  });
+
+  const rotatables = Array.from(document.querySelectorAll('.rotatable'));
+  rotatables.forEach(registerItem);
+
+  setEffectiveOrientation(0, { updateInput: true });
+  updateAllControls();
+})();
+</script>
 </body>
 </html>
